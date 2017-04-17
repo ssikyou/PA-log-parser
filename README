@@ -1,0 +1,3 @@
+source env_setup.sh
+make clean
+make
