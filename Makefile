@@ -1,11 +1,11 @@
 CC ?= gcc
 AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_FORTIFY_SOURCE=2
-INCLUDE = -I.
+INCLUDE = -I. -I ./include -I ./CsvParser/include -I ./eMMCParser
 CFLAGS ?= $(INCLUDE) -g -O2 -pie -fPIE
-LDFLAGS ?= -Lhealthlib -pie -fPIE
+LDFLAGS ?= -pie -fPIE
 LIBS =
 
-CHECKFLAGS = -Wall -Wuninitialized -Wundef -Werror
+CHECKFLAGS = -Wall -Wuninitialized -Wundef #-Werror
 
 #DEPFLAGS = -Wp,-MMD,$(@D)/.$(@F).d,-MT,$@
 
@@ -13,6 +13,9 @@ override CFLAGS := $(CHECKFLAGS) $(AM_CFLAGS) $(CFLAGS)
 
 objects = \
 	main.o \
+	utils.o \
+	CsvParser/src/csvparser.o \
+	eMMCParser/emmcparser.o
 
 progs = PAlogparser
 depend_libs =
@@ -22,7 +25,7 @@ all: $(progs)
 .c.o:
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
-ffu: $(objects) $(depend_libs)
+PAlogparser: $(objects) $(depend_libs)
 	$(CC) -o $@ $(objects) $(LDFLAGS) $(LIBS)
 
 clean:
