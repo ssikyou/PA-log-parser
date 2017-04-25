@@ -15,7 +15,8 @@ objects = \
 	main.o \
 	utils.o \
 	CsvParser/src/csvparser.o \
-	eMMCParser/emmcparser.o
+	eMMCParser/emmcparser.o \
+	eMMCParser/emmcfunc.o
 
 progs = PAlogparser
 depend_libs =

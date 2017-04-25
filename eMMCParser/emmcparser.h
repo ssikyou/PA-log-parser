@@ -93,7 +93,6 @@ typedef struct mmc_row {
 
 #define TYPE_END	255
 
-
 typedef struct event_parse_template {
 	unsigned char event_type;
 	char *event_string;
@@ -104,8 +103,6 @@ typedef struct event_parse_template {
 	int (* parse_clock)(void *clock, void *out);
 } event_parse_template;
 
-
-
 typedef struct CMD25Info {
 	unsigned int total_time;
 	unsigned int address;
@@ -113,7 +110,6 @@ typedef struct CMD25Info {
 	unsigned short max_busy_t;
 	unsigned short busy_t[];
 } CMD25Info;
-
 
 typedef struct CMD18Info {
 	unsigned int total_time;
@@ -123,21 +119,20 @@ typedef struct CMD18Info {
 	unsigned short nac[];
 } CMD18Info;
 
-
 typedef struct stats {
 	struct list_head all_events;
 	struct list_head cmd25_list;
 	struct list_head cmd18_list;
 	struct list_head cmd24_list;
 	struct list_head cmd17_list;
-
+	struct list_head requests_list;
 } stats;
-
 
 #define RESP_R1  	0
 #define RESP_R1B  	1
 #define RESP_R2  	2
 #define RESP_R3  	3
+#define RESP_UND	255
 
 typedef struct mmc_cmd {
 	unsigned short cmd_index;
@@ -147,12 +142,12 @@ typedef struct mmc_cmd {
 	unsigned char resp_type;
 	union {
 		unsigned int r1;
+		unsigned int r1b;
 		unsigned int r2[4];
 		unsigned int r3;
 	} resp;
 
 } mmc_cmd;
-
 
 typedef struct mmc_request {
 	struct list_head req_node;
@@ -160,15 +155,15 @@ typedef struct mmc_request {
 	mmc_cmd *cmd;
 	mmc_cmd *stop;
 	unsigned short sectors;
-	unsigned int total_time;	//includes delay time
-	unsigned int *delay;	//for wr busy, for rd Nac
-
 	void *data;
 	unsigned int len;
 
+	//for performance analysis
+	unsigned int total_time;	//includes delay time
+	unsigned int *delay;		//for wr busy, for rd Nac
 } mmc_request;
 
-
+#define STATE_NONE		-1
 #define STATE_OPEN_WR	0
 #define STATE_OPEN_RD	1
 #define STATE_SBC_WR	2
@@ -176,8 +171,10 @@ typedef struct mmc_request {
 #define STATE_SINGLE_WR	4
 #define STATE_SINGLE_RD	5
 
-#define DIR_RD	0
-#define DIR_WR	1
+#define REQ_NONE	-1
+#define REQ_NORMAL	0
+#define REQ_WR		1
+#define REQ_RD		2
 
 typedef struct mmc_parser {
 	int state;
@@ -186,20 +183,24 @@ typedef struct mmc_parser {
 	mmc_request * prev_req;
 	mmc_request * cur_req;
 	int use_sbc;
-	int dir;	//direction, rd 0, wr 1
+	int req_type;		//
 	int parse_data;		//wether parse data or not
-	int wr_cnt;
-
+	int trans_cnt;		//already transfered sector count
 
 } mmc_parser;
 
-
-
-
-
+/* emmc parser functions */
 mmc_parser *mmc_parser_init();
+void mmc_parser_destroy(mmc_parser *parser);
+int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum);
+
 int parse_event_id(void *data, unsigned int *out);
 int parse_event_time(void *data, event_time *out);
-int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum);
+int parse_cmd_args(void *data, unsigned int *out);
+int parse_cmd_info(void *data, unsigned int *out);
+int parse_resp_r1(void *data, unsigned int *out);
+int parse_rw_data(void *data, void *out);
+int parse_wr_busy(void *data, unsigned int *out);
+
 
 #endif

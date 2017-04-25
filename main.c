@@ -16,6 +16,7 @@
 #include "emmcparser.h"
 
 int g_debug_level = L_DEBUG;
+extern struct list_head g_requests;
 
 static struct option cmd_options[] = {
 	{ "help",	0, 0, 'h' },
@@ -59,6 +60,7 @@ int main(int argc, char **argv)
 	if(helper_arg(1, 1, &argc, &argv, cmd_help) != 0)
 		return -1;
 
+	dbg(L_DEBUG, "parse start!!!\n");
 	mmc_parser *parser = mmc_parser_init();
 
 	unsigned int cur_line = 1;
@@ -84,9 +86,14 @@ int main(int argc, char **argv)
 		cur_line++;
         CsvParser_destroy_row(row);
     }
-    CsvParser_destroy(csvparser);
-	
 
+    dump_req_list(&g_requests);
+    
+    CsvParser_destroy(csvparser);
+	mmc_parser_destroy(parser);
+
+
+	dbg(L_DEBUG, "parse end!!!\n");
 	return ret;
 }
 
