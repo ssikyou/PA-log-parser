@@ -15,6 +15,34 @@
 #include "common.h"
 #include "emmcparser.h"
 
+event_parse_template events[] = {
+	/*{TYPE_0, " CMD00(GO_IDLE_STATE)"},
+	{TYPE_1, " CMD01(SEND_OP_COND)"},
+	{TYPE_2, " CMD02(ALL_SEND_CID)"},
+	*/
+	{TYPE_6, " CMD06(SWITCH)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_12, " CMD12(STOP_TRANSMISSION)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_13, " CMD13(SEND_STATUS)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_17, " CMD17(READ_SINGLE_BLOCK)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_18, " CMD18(READ_MULTIPLE_BLOCK)", parse_cmd_args, parse_cmd_sc, NULL, NULL},
+	{TYPE_23, " CMD23(SET_BLOCK_COUNT)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_24, " CMD24(WRITE_SINGLE_BLOCK)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_25, " CMD25(WRITE_MULTIPLE_BLOCK)", parse_cmd_args, parse_cmd_sc, NULL, NULL},
+	{TYPE_R1, "  R1 ", parse_resp_r1, NULL, NULL, NULL},
+	{TYPE_R1B, "  R1b", parse_resp_r1, NULL, NULL, NULL},
+	{TYPE_WR, "   Write", parse_rw_data, NULL, NULL, NULL},
+	{TYPE_BUSY_START, "    BUSY START", NULL, NULL, NULL, NULL},
+	{TYPE_BUSY_END, "    BUSY END", NULL, parse_wr_busy, NULL, NULL},
+	{TYPE_RD, "   Read", parse_rw_data, parse_rd_waittime, NULL, NULL},
+
+
+};
+
+int get_temp_nums()
+{
+	return NELEMS(events);
+}
+
 int parse_cmd_args(void *data, unsigned int *out)
 {
 	char tmp[50];
@@ -64,7 +92,7 @@ int parse_rw_data(void *data, void *out)
 
 int parse_wr_busy(void *data, unsigned int *out)
 {
-	char tmp[30];
+	char tmp[128];
 	memset(tmp, '\0', 30);
 	char *str = tmp;
 	memcpy(str, data, strlen((char *)data));
@@ -81,15 +109,34 @@ int parse_wr_busy(void *data, unsigned int *out)
 	return 0;
 }
 
-int parse_cmd_info(void *data, unsigned int *out)
+int parse_rd_waittime(void *data, unsigned int *out)
+{
+	char tmp[128];
+	memset(tmp, '\0', 30);
+	char *str = tmp;
+	memcpy(str, data, strlen((char *)data));
+
+	strsep(&str, ":");	//"WaitTime" tag
+	char *wait_time = str;	//unit is us
+
+	dbg(L_DEBUG, "wait_time str:%s\n", wait_time);
+	unsigned int v = strtoul(wait_time, NULL, 0);
+	dbg(L_DEBUG, "v:%u\n", v);
+
+	*out = v;
+
+	return 0;
+}
+
+int parse_cmd_sc(void *data, unsigned int *out)
 {
 	char tmp[50];
 	memset(tmp, '\0', 50);
 	char *str = tmp;
 	memcpy(str, data, strlen((char *)data));
 
-	char *arg_part = strsep(&str, ":");
-	char *arg_value = arg_part;
+	strsep(&str, ":");	//"SC" tag
+	char *arg_value = str;
 
 	dbg(L_DEBUG, "arg_value str:%s\n", arg_value);
 	unsigned int v = strtoul(arg_value, NULL, 0);

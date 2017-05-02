@@ -5,7 +5,7 @@ CFLAGS ?= $(INCLUDE) -g -O2 -pie -fPIE
 LDFLAGS ?= -pie -fPIE
 LIBS =
 
-CHECKFLAGS = -Wall -Wuninitialized -Wundef #-Werror
+CHECKFLAGS = -Wall -Wuninitialized -Wundef -w#-Werror 
 
 #DEPFLAGS = -Wp,-MMD,$(@D)/.$(@F).d,-MT,$@
 

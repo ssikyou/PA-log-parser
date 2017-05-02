@@ -18,6 +18,59 @@
 int g_debug_level = L_DEBUG;
 extern struct list_head g_requests;
 
+int exec_shell(char *str)
+{
+	int ret = 0;
+    int status; 
+  
+    status = system(str);  
+  
+    if (-1 == status) {  
+    	ret = -1;
+        error("system error!");  
+    } else {  
+        dbg(L_DEBUG, "exit status value = [0x%x]\n", status);  
+  
+        if (WIFEXITED(status)) {  
+            if (0 == WEXITSTATUS(status)) {  
+            	ret = 0;
+                dbg(L_DEBUG, "run shell script successfully.\n");  
+            } else {  
+            	ret = -1;
+                error("run shell script fail, script exit code: %d\n", WEXITSTATUS(status));  
+            }
+        } else {  
+        	ret = -1;
+            error("exit status = [%d]\n", WEXITSTATUS(status));  
+        }  
+    }  
+
+  	return ret;
+}
+
+void search_csv(char *file, int *has_data, int *has_busy)
+{
+	char busy_str[256] = "grep  -i -m 1 '\\\"    BUSY START\\\"' ";
+	char read_str[256] = "grep  -i -m 1 '\\\"   Read\\\"' ";
+	char write_str[256] = "grep  -i -m 1 '\\\"   Write\\\"' ";
+
+	strcat(busy_str, file);
+	strcat(read_str, file);
+	strcat(write_str, file);
+	dbg(L_DEBUG, "search busy: %s\n", busy_str);
+	*has_busy = (exec_shell(busy_str)==0)?1:0;
+
+	dbg(L_DEBUG, "search read: %s\n", read_str);
+	//exec_shell(read_str);
+
+	dbg(L_DEBUG, "search write: %s\n", write_str);
+	//exec_shell(write_str);
+
+	*has_data = ((exec_shell(read_str)==0)?1:0) || ((exec_shell(write_str)==0)?1:0);
+
+	dbg(L_DEBUG, "has busy %d, has data %d\n", *has_busy, *has_data);	
+}
+
 static struct option cmd_options[] = {
 	{ "help",	0, 0, 'h' },
 	{ "line",	1, 0, 'l' },
@@ -30,7 +83,7 @@ static const char *cmd_help =
 	"arguments:\n"
 	"\tcsvfile: csv file path\n"
 	"options:\n"
-	"\t--line: only parse lines\n"
+	"\t--line: only parse first n lines\n"
 	"Example:\n"
 	"\tPAlogparser --line=100 test.csv\n";
 
@@ -40,13 +93,15 @@ int main(int argc, char **argv)
 	int ret = 0;
 
 	unsigned int parse_lines = UINT_MAX;
+	int has_data = 0;
+	int has_busy = 0;
 
-    while ((opt=getopt_long(argc, argv, "hl:f:", cmd_options, NULL)) != -1) {
+    while ((opt=getopt_long(argc, argv, "hl:db", cmd_options, NULL)) != -1) {
 		switch (opt) {
 			case 'l':
 				parse_lines = strtol(optarg, NULL, 0);
-				break;
-	
+				break;			
+
 			case 'h':
 			default:
 				printf("%s", cmd_help);
@@ -61,8 +116,15 @@ int main(int argc, char **argv)
 		return -1;
 
 	dbg(L_DEBUG, "parse start!!!\n");
-	mmc_parser *parser = mmc_parser_init();
 
+	search_csv(argv[0], &has_data, &has_busy);
+
+	if (!has_busy)
+		dbg(L_INFO, "The log file has no busy info, we will not parse the busy time and total time!\n");
+
+	mmc_parser *parser = mmc_parser_init(has_data, has_busy);
+
+#if 1
 	unsigned int cur_line = 1;
 	//int i =  0;
 	
@@ -88,10 +150,11 @@ int main(int argc, char **argv)
     }
 
     dump_req_list(&g_requests);
-    
-    CsvParser_destroy(csvparser);
-	mmc_parser_destroy(parser);
 
+    CsvParser_destroy(csvparser);
+
+	mmc_parser_destroy(parser);
+#endif
 
 	dbg(L_DEBUG, "parse end!!!\n");
 	return ret;

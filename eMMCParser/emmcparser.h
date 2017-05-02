@@ -157,6 +157,7 @@ typedef struct mmc_request {
 	unsigned short sectors;
 	void *data;
 	unsigned int len;
+	unsigned int len_per_trans;
 
 	//for performance analysis
 	unsigned int total_time;	//includes delay time
@@ -176,6 +177,11 @@ typedef struct mmc_request {
 #define REQ_WR		1
 #define REQ_RD		2
 
+typedef struct parser_config {
+
+
+} parser_config;
+
 typedef struct mmc_parser {
 	int state;
 	mmc_cmd *prev_cmd;
@@ -184,23 +190,25 @@ typedef struct mmc_parser {
 	mmc_request * cur_req;
 	int use_sbc;
 	int req_type;		//
-	int parse_data;		//wether parse data or not
+	int has_data;		//has write or read data event
+	int has_busy;		//has busy event
 	int trans_cnt;		//already transfered sector count
 
 } mmc_parser;
 
 /* emmc parser functions */
-mmc_parser *mmc_parser_init();
+mmc_parser *mmc_parser_init(int parse_data, int parse_busy);
 void mmc_parser_destroy(mmc_parser *parser);
 int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum);
 
 int parse_event_id(void *data, unsigned int *out);
 int parse_event_time(void *data, event_time *out);
 int parse_cmd_args(void *data, unsigned int *out);
-int parse_cmd_info(void *data, unsigned int *out);
+int parse_cmd_sc(void *data, unsigned int *out);
 int parse_resp_r1(void *data, unsigned int *out);
 int parse_rw_data(void *data, void *out);
 int parse_wr_busy(void *data, unsigned int *out);
+int parse_rd_waittime(void *data, unsigned int *out);
 
 
 #endif
