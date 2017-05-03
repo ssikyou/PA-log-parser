@@ -16,25 +16,41 @@
 #include "emmcparser.h"
 
 event_parse_template events[] = {
-	/*{TYPE_0, " CMD00(GO_IDLE_STATE)"},
-	{TYPE_1, " CMD01(SEND_OP_COND)"},
-	{TYPE_2, " CMD02(ALL_SEND_CID)"},
-	*/
+	{TYPE_0, " CMD00(GO_PRE_IDLE_STATE)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_0, " CMD00(GO_IDLE_STATE)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_1, " CMD01(SEND_OP_COND)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_2, " CMD02(ALL_SEND_CID)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_3, " CMD03(SET_RELATIVE_ADDR)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_5, " CMD05(SLEEP_AWAKE)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_7, " CMD07(SELECT/DESELECT_CARD)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_8, " CMD08(SEND_EXT_CSD)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_9, " CMD09(SEND_CSD)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_10, " CMD10(SEND_CID)", parse_cmd_args, NULL, NULL, NULL},
+
 	{TYPE_6, " CMD06(SWITCH)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_12, " CMD12(STOP_TRANSMISSION)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_13, " CMD13(SEND_STATUS)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_16, " CMD16(SET_BLOCK_LEN)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_17, " CMD17(READ_SINGLE_BLOCK)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_18, " CMD18(READ_MULTIPLE_BLOCK)", parse_cmd_args, parse_cmd_sc, NULL, NULL},
 	{TYPE_23, " CMD23(SET_BLOCK_COUNT)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_24, " CMD24(WRITE_SINGLE_BLOCK)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_25, " CMD25(WRITE_MULTIPLE_BLOCK)", parse_cmd_args, parse_cmd_sc, NULL, NULL},
+
+	{TYPE_35, " CMD35(ERASE_GROUP_START)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_36, " CMD36(ERASE_GROUP_END)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_38, " CMD38(ERASE)", parse_cmd_args, NULL, NULL, NULL},
+
+	{TYPE_55, " CMD55(APP_CMD)", parse_cmd_args, NULL, NULL, NULL},
+
 	{TYPE_R1, "  R1 ", parse_resp_r1, NULL, NULL, NULL},
 	{TYPE_R1B, "  R1b", parse_resp_r1, NULL, NULL, NULL},
+	{TYPE_R2, "  R2 ", parse_resp_r2, NULL, NULL, NULL},
+	{TYPE_R3, "  R3 ", parse_resp_r1, NULL, NULL, NULL},
 	{TYPE_WR, "   Write", parse_rw_data, NULL, NULL, NULL},
 	{TYPE_BUSY_START, "    BUSY START", NULL, NULL, NULL, NULL},
 	{TYPE_BUSY_END, "    BUSY END", NULL, parse_wr_busy, NULL, NULL},
 	{TYPE_RD, "   Read", parse_rw_data, parse_rd_waittime, NULL, NULL},
-
 
 };
 
@@ -79,6 +95,35 @@ int parse_resp_r1(void *data, unsigned int *out)
 	dbg(L_DEBUG, "status:0x%x\n", status);
 
 	*out = status;
+	return 0;
+}
+
+//parse string like "RSP:3F13014E51314A35354C100FF2A5BDA2F1 [135:0]"
+int parse_resp_r2(void *data, unsigned int *out)
+{
+	char tmp[128];
+	memset(tmp, '\0', 128);
+	char *str = tmp;
+	memcpy(str, data, strlen((char *)data));
+
+	char *resp_part = strsep(&str, " ");
+	strsep(&resp_part, ":");
+	char *resp_value = resp_part;
+
+	int i;
+	unsigned int r2[4];
+	char sub_str[16];
+	memset(sub_str, '\0', 16);
+
+	for (i=0; i<4; i++) {
+		strncpy(sub_str, resp_value+2+i*8, 8);
+		r2[3-i] = strtoul(sub_str, NULL, 16);
+	}
+
+	dbg(L_DEBUG, "R2(msb->lsb), value:0x%x %x %x %x\n", r2[3], r2[2], r2[1], r2[0]);
+
+	memcpy(out, r2, 4*sizeof(int));
+
 	return 0;
 }
 

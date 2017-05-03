@@ -62,6 +62,7 @@ typedef struct mmc_row {
 #define TYPE_10		10
 #define TYPE_12		12
 #define TYPE_13		13
+#define TYPE_16		16
 
 //Read
 #define TYPE_17		17
@@ -209,6 +210,6 @@ int parse_resp_r1(void *data, unsigned int *out);
 int parse_rw_data(void *data, void *out);
 int parse_wr_busy(void *data, unsigned int *out);
 int parse_rd_waittime(void *data, unsigned int *out);
-
+int parse_resp_r2(void *data, unsigned int *out);
 
 #endif

@@ -182,7 +182,7 @@ void dump_cmd(mmc_cmd *cmd)
 	else if (cmd->resp_type == RESP_R1B)
 		dbg(L_DEBUG, "\t\tresp type R1B, value:0x%x\n", cmd->resp.r1b);
 	else if (cmd->resp_type == RESP_R2)
-		dbg(L_DEBUG, "\t\tresp type R2, value:0x%x %x %x %x\n", cmd->resp.r2[0], cmd->resp.r2[1], cmd->resp.r2[2], cmd->resp.r2[3]);
+		dbg(L_DEBUG, "\t\tresp type R2(msb->lsb), value:0x%x %x %x %x\n", cmd->resp.r2[3], cmd->resp.r2[2], cmd->resp.r2[1], cmd->resp.r2[0]);
 	else if (cmd->resp_type == RESP_R3)
 		dbg(L_DEBUG, "\t\tresp type R3, value:0x%x\n", cmd->resp.r3);
 	else
@@ -283,9 +283,9 @@ static void end_request(mmc_parser *parser)
 	clear_parser_status(parser);
 }
 
-static void calc_req_total_time(mmc_parser *parser, unsigned int end_time_us)
+static void calc_req_total_time(mmc_request *req, unsigned int end_time_us)
 {
-	parser->cur_req->total_time = end_time_us - parser->cur_req->cmd->time.time_us;
+	req->total_time = end_time_us - req->cmd->time.time_us;
 }
 
 int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
@@ -349,6 +349,49 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 	}
 
 	switch (event_type) {
+		case TYPE_0:
+		case TYPE_5:
+		case TYPE_55:
+		/*
+			if (parser->prev_req && parser->prev_req->cmd->cmd_index == TYPE_0) {
+				calc_req_total_time(parser->prev_req, time.time_us);
+				//dispatch pre request
+			}*/
+
+			begin_request(parser, 0, cmd, REQ_NORMAL, 0);
+			parser->cur_cmd->resp_type = RESP_UND;
+			end_request(parser);
+			end_cmd(parser);
+		break;
+
+		case TYPE_1:
+		/*
+			//last cmd0
+			if (parser->prev_req && parser->prev_req->cmd->cmd_index == TYPE_0) {
+				calc_req_total_time(parser->prev_req, time.time_us);
+				//dispatch pre request
+			}
+			*/
+
+			begin_request(parser, 0, cmd, REQ_NORMAL, 0);
+		break;
+
+		case TYPE_2:
+		case TYPE_3:
+		case TYPE_7:
+		case TYPE_9:
+		case TYPE_10:
+		case TYPE_16:
+		case TYPE_35:
+		case TYPE_36:
+		case TYPE_38:
+			begin_request(parser, 0, cmd, REQ_NORMAL, 0);
+		break;
+
+		case TYPE_8:
+			begin_request(parser, 0, cmd, REQ_RD, 1);
+		break;
+
 		case TYPE_6:
 			begin_request(parser, 0, cmd, REQ_NORMAL, 0);
 		break;
@@ -419,7 +462,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 
 			parser->trans_cnt++;
 
-			//has data, no busy
+			//sbc write, has data, no busy
 			if (parser->trans_cnt == parser->cur_req->sectors && !has_busy && 
 				(parser->cur_req->sbc || parser->cur_req->cmd->cmd_index==TYPE_24)) {
 				end_request(parser);
@@ -445,16 +488,17 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 					parser->cur_req->delay[parser->trans_cnt-1] = busy_time;
 
 				dbg(L_DEBUG, "cur trans count:%d, all sc:%d\n", parser->trans_cnt, parser->cur_req->sectors);
-				//check cur quest end here? has busy 
+				//sbc write, has busy 
 				if (parser->trans_cnt == parser->cur_req->sectors && 
 					(parser->cur_req->sbc || parser->cur_req->cmd->cmd_index==TYPE_24)) {
-					calc_req_total_time(parser, time.time_us);
+					calc_req_total_time(parser->cur_req, time.time_us);
 
 					end_request(parser);
-				} else if (parser->cur_req->stop) {	//receive cmd12's busy end
+				} else if (parser->cur_req->stop) {	//openended write, has busy
+					//receive cmd12's busy end
 					parser->cur_req->delay[parser->trans_cnt-1] += busy_time;
 					
-					calc_req_total_time(parser, time.time_us);
+					calc_req_total_time(parser->cur_req, time.time_us);
 
 					end_request(parser);
 				}
@@ -464,7 +508,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 				ept->parse_info(rowFields[COL_INFO], &busy_time);
 				parser->cur_req->delay = busy_time;		//store busy time in pointer
 				//calc total time here
-				calc_req_total_time(parser, time.time_us);
+				calc_req_total_time(parser->cur_req, time.time_us);
 
 				end_request(parser);
 			}
@@ -473,31 +517,32 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 
 		case TYPE_RD:
 		{
-			//parse data to req's data area
-			if (strlen(rowFields[COL_DATA])/2 < 512) {
-				// not enough data, do not parse
-				dbg(L_DEBUG, "no enough data, do not parse\n");
-			} else {
-				ept->parse_data(rowFields[COL_DATA], (unsigned char*)parser->cur_req->data + parser->cur_req->len);
-				parser->cur_req->len += 512;
-			}
-
-			parser->trans_cnt++;
-
-			/*
-				parse read delay time, for read the delay time is in data part
-			*/
 			if (parser->req_type == REQ_RD) {
+				//parse data to req's data area
+				if (strlen(rowFields[COL_DATA])/2 < 512) {
+					// not enough data, do not parse
+					dbg(L_DEBUG, "no enough data, do not parse\n");
+				} else {
+					ept->parse_data(rowFields[COL_DATA], (unsigned char*)parser->cur_req->data + parser->cur_req->len);
+					parser->cur_req->len += 512;
+				}
+
+				parser->trans_cnt++;
+
+				/*
+					parse read delay time, for read the delay time is in data part
+				*/
+				
 				unsigned int wait_time;
 				ept->parse_info(rowFields[COL_INFO], &wait_time);
 				
 				parser->cur_req->delay[parser->trans_cnt-1] = wait_time;
 
 				dbg(L_DEBUG, "cur trans count:%d, all sc:%d\n", parser->trans_cnt, parser->cur_req->sectors);
-				//check cur quest end here? has busy 
+				//sbc read with data info
 				if (parser->trans_cnt == parser->cur_req->sectors && 
-					(parser->cur_req->sbc || parser->cur_req->cmd->cmd_index==TYPE_17)) {
-					calc_req_total_time(parser, time.time_us);
+					(parser->cur_req->sbc || parser->cur_req->cmd->cmd_index==TYPE_17 || parser->cur_req->cmd->cmd_index==TYPE_8)) {
+					calc_req_total_time(parser->cur_req, time.time_us);
 
 					end_request(parser);
 				} 
@@ -518,19 +563,46 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 			ept->parse_data(rowFields[COL_DATA], &parser->cur_cmd->resp.r1);
 
 			switch (parser->cur_cmd->cmd_index) {
+				case TYPE_3:
 				case TYPE_13:
-				{
-					calc_req_total_time(parser, time.time_us);
+				case TYPE_16:
+				case TYPE_35:
+				case TYPE_36:
+					calc_req_total_time(parser->cur_req, time.time_us);
 					end_request(parser);
-				}
+				break;
+
+				case TYPE_8:
+				case TYPE_17:
+					if (!has_data) {	//the total time is not accurate!
+						calc_req_total_time(parser->cur_req, time.time_us);
+						end_request(parser);
+					}
+				break;
+
+				case TYPE_18:
+					//sbc read but no data info
+					if (parser->cur_req->sbc && !has_data) {	//the total time is not accurate!
+						calc_req_total_time(parser->cur_req, time.time_us);
+						end_request(parser);
+					}
+
+				break;
+
+				case TYPE_24:
+					//no data, no busy
+					if (!has_busy && !has_data) {
+						end_request(parser);
+					}
 				break;
 
 				case TYPE_25:
-					//no data, no busy
+					//sbc write, no data, no busy
 					if (!has_busy && !has_data && parser->cur_req->sbc) {
 						end_request(parser);
 					}
 				break;
+
 			}
 
 			end_cmd(parser);
@@ -547,10 +619,12 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 
 			switch (parser->cur_cmd->cmd_index) {
 				case TYPE_12:
-				//openended read
+				//openended read, with or without data info 
 				if (parser->req_type == REQ_RD) {
-					calc_req_total_time(parser, time.time_us);
-
+					calc_req_total_time(parser->cur_req, time.time_us);
+					end_request(parser);
+				} else if (parser->req_type == REQ_WR && !has_busy) {	//openended write, no busy, with or without data 
+					calc_req_total_time(parser->cur_req, time.time_us);
 					end_request(parser);
 				}
 				break;
@@ -560,13 +634,53 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 						end_request(parser);
 					}
 				break;
+
+				case TYPE_38:	//for current, assume cmd38 has no busy info
+				case TYPE_7:
+					calc_req_total_time(parser->cur_req, time.time_us);
+					end_request(parser);
+				break;
 			}
 
 			end_cmd(parser);
 		break;
 
+		case TYPE_R2:
+			//cmd2, cmd9, cmd10
+			if (parser->cur_cmd == NULL) {
+				error("received response but no cmd parsed, by pass...\n");
+				return -1;
+			}
+
+			//fill in cur cmd's resp
+			parser->cur_cmd->resp_type = RESP_R2;
+			ept->parse_data(rowFields[COL_DATA], parser->cur_cmd->resp.r2);
+
+			calc_req_total_time(parser->cur_req, time.time_us);
+			end_request(parser);
+
+			end_cmd(parser);
+		break;
+
+		case TYPE_R3:
+			if (parser->cur_cmd == NULL) {
+				error("received response but no cmd parsed, by pass...\n");
+				return -1;
+			}
+
+			//fill in cur cmd's resp
+			parser->cur_cmd->resp_type = RESP_R3;
+			ept->parse_data(rowFields[COL_DATA], &parser->cur_cmd->resp.r3);
+
+			calc_req_total_time(parser->cur_req, time.time_us);
+			end_request(parser);
+
+			end_cmd(parser);
+		break;
+
 		default:
-			error("unimplemented event type...\n");
+			error("unimplemented event type, should not going here...\n");
+			exit(EXIT_FAILURE);
 		break;
 	}
 
@@ -576,168 +690,4 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 	//destroy_mmc_row(row);
 
 	return 0;
-}
-
-
-
-
-int mmc_row_parse2(mmc_parser *parser, const char **rowFields, int fieldsNum)
-{
-	int ret = 0;
-	mmc_row *row;
-	mmc_request *req;
-	mmc_cmd *cmd;
-	event_parse_template *ept = NULL;
-	int event_type;
-	int i;
-
-	//alloc mmc_row
-	row = alloc_mmc_row();
-	if (row == NULL) {
-
-	}
-
-	//parse event id
-	ret = parse_event_id(rowFields[COL_ID], &row->event_id);
-
-	//parse time
-	//ret = parse_event_time(rowFields[COL_TIME], &row->time);
-
-	//parse_cmd_args(rowFields[COL_DATA], &row->event_data.arg);
-#if 0
-	//search events array to find the event template
-	for (i = 0; i < NELEMS(events); i++) {
-		if (strncmp(events[i].event_string,
-				rowFields[COL_TYPE], strlen(events[i].event_string)))
-			continue;
-
-		ept = &events[i];
-		break;
-	}
-
-	if (ept == NULL) {
-		error("do not find the event template for %s!\n", rowFields[COL_TYPE]);
-		return -1;
-	}
-
-	event_type = ept->event_type;
-
-
-	if (is_cmd(event_type)) {
-		cmd = alloc_cmd();
-		//fill cmd
-		cmd->cmd_index = event_type;
-		ept->parse_data(rowFields[COL_DATA], &cmd->arg);
-		parse_event_time(rowFields[COL_TIME], &cmd->time);
-		parser->cur_cmd = cmd;
-	}
-
-#endif
-
-#if 0
-
-	while () 
-	{
-		switch (parser->state) {
-			case INIT:
-
-			if (event_type == TYPE_23) {
-				//fill req
-				req = alloc_req();
-				req->sbc = cmd;
-				req->sectors = cmd->arg;
-				parser->cur_req = req;
-				parser->use_sbc = 1;
-				parser->state = STATE_SBC_WR;
-			}
-
-
-			
-			break;
-
-			case PREP:
-				
-				if r1
-				get resp type, set to cur Cmd
-
-				if cmd25 && using sbc
-				parser change cur Cmd to cmd25
-				transit to MULTI_WR
-
-				if cmd18 && using sbc
-				parser change cur Cmd to cmd18
-				transit to MULTI_RD
-				
-			break;
-
-			case NORMAL:
-
-
-			break;
-
-
-			case STATE_SBC_WR:
-				
-			if r1
-			if (parser->cur_cmd == NULL) {
-				error("received response but no cmd parsed, by pass...\n");
-				return -1;
-			}
-
-			//fill in cur cmd's resp
-			parser->cur_cmd->resp_type = RESP_R1;
-			ept->parse_data(rowFields[COL_DATA], &parser->cur_cmd->resp.r1);
-
-
-			if (parser->cur_cmd.cmd_index == TYPE_13) {
-				EventTime time;
-				parse_event_time(rowFields[COL_TIME], &time);
-				//check status, ready or other?
-				if ready {
-					//calculate prev req's total time
-					if (parser->use_sbc)
-					parser->prev_req.total_time = time.time_us -time.interval_us - parser->prev_req->cmd.time.time_us;
-
-					//end of cur and prev request, clear parser status
-					parser->prev_req = parser->cur_req;
-					parser->cur_req = NULL;
-	
-
-				} else {
-	
-				}
-			}
-
-
-			parser->prev_cmd = parser->cur_cmd;
-			parser->cur_cmd = NULL;
-
-
-
-
-				if r1b, cur cmd must be cmd12
-				
-				if cmd25 && using sbc
-				parser change cur Cmd to cmd25
-
-				if "Write"
-				parse data, parse interval time
-
-				if cmd12
-				parser change cur Cmd to cmd12
-
-				if cmd13
-				calc total time, set to cur req
-
-
-
-				
-			break;
-
-		}
-	}
-#endif
-
-	return 0;
-
 }

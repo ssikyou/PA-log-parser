@@ -16,6 +16,7 @@
 #include "emmcparser.h"
 
 int g_debug_level = L_DEBUG;
+//int g_debug_level = L_INFO;
 extern struct list_head g_requests;
 
 int exec_shell(char *str)
@@ -37,7 +38,7 @@ int exec_shell(char *str)
                 dbg(L_DEBUG, "run shell script successfully.\n");  
             } else {  
             	ret = -1;
-                error("run shell script fail, script exit code: %d\n", WEXITSTATUS(status));  
+                dbg(L_DEBUG, "run shell script fail, script exit code: %d\n", WEXITSTATUS(status));  
             }
         } else {  
         	ret = -1;
@@ -50,9 +51,9 @@ int exec_shell(char *str)
 
 void search_csv(char *file, int *has_data, int *has_busy)
 {
-	char busy_str[256] = "grep  -i -m 1 '\\\"    BUSY START\\\"' ";
-	char read_str[256] = "grep  -i -m 1 '\\\"   Read\\\"' ";
-	char write_str[256] = "grep  -i -m 1 '\\\"   Write\\\"' ";
+	char busy_str[256] = "grep -q -i -m 1 '\\\"    BUSY START\\\"' ";
+	char read_str[256] = "grep -q -i -m 1 '\\\"   Read\\\"' ";
+	char write_str[256] = "grep -q -i -m 1 '\\\"   Write\\\"' ";
 
 	strcat(busy_str, file);
 	strcat(read_str, file);
@@ -119,8 +120,10 @@ int main(int argc, char **argv)
 
 	search_csv(argv[0], &has_data, &has_busy);
 
+	if (!has_data)
+		dbg(L_INFO, "The log file has no data info, we can not parse the read latency time!\n");
 	if (!has_busy)
-		dbg(L_INFO, "The log file has no busy info, we will not parse the busy time and total time!\n");
+		dbg(L_INFO, "The log file has no busy info, we can not parse the write busy time and the request's total time is not accurate!\n");
 
 	mmc_parser *parser = mmc_parser_init(has_data, has_busy);
 
