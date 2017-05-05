@@ -127,12 +127,43 @@ int parse_resp_r2(void *data, unsigned int *out)
 	return 0;
 }
 
-//assue string length is 1024 that is 512 bytes, a block size
+//parse string like "FEFEFEFE FEFEFEFE FEFEFEFE FEFEFEFE .... .... .... ...." or "FEFEFFFF ...."
 int parse_rw_data(void *data, void *out)
 {
-	//convert two chars to a byte
+	//512bytes => needs 128*(8+4)+128*2-1 = 1791 chars buffer
+	
+	char tmp[2048];
+	memset(tmp, '\0', 2048);
+	char *str = tmp;
+	memcpy(str, data, strlen((char *)data));
 
-	return 0;
+	unsigned char block[512];
+	char sub_part[10];
+	int i=0, j=0;
+
+	while (1) {
+		char *part = strsep(&str, " ");
+		if (strlen(part)==8) {
+			//convert two chars to a byte
+			for (i=0; i<4; i++) {
+				strncpy(sub_part, part+i*2, 2);
+				block[j++] = strtoul(sub_part, NULL, 16) & 0xff;
+			}
+		} else {
+			//data has been parsed
+			break;
+		}
+	}
+
+	dbg(L_DEBUG, "len_per_trans:%d\n", j);
+	for (i=0; i<j; i++) {
+		dbg(L_DEBUG, "%x ", block[i]);
+	}
+	dbg(L_DEBUG, "\n");
+
+	memcpy(out, block, j*sizeof(unsigned char));
+
+	return j;
 }
 
 int parse_wr_busy(void *data, unsigned int *out)

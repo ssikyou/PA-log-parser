@@ -15,8 +15,8 @@
 #include "csvparser.h"
 #include "emmcparser.h"
 
-int g_debug_level = L_DEBUG;
-//int g_debug_level = L_INFO;
+//int g_debug_level = L_DEBUG;
+int g_debug_level = L_INFO;
 extern struct list_head g_requests;
 
 int exec_shell(char *str)
@@ -75,15 +75,19 @@ void search_csv(char *file, int *has_data, int *has_busy)
 static struct option cmd_options[] = {
 	{ "help",	0, 0, 'h' },
 	{ "line",	1, 0, 'l' },
+	{ "debug",	0, 0, 'd' },
+	{ "quite",	0, 0, 'q' },
 	{ 0, 0, 0, 0 }
 };
 
 static const char *cmd_help =
 	"Usage:\n"
-	"\tPAlogparser [--line=n] </path/to/csvfile>\n"
+	"\tPAlogparser [--line=n] [--debug] [--quite] </path/to/csvfile>\n"
 	"arguments:\n"
 	"\tcsvfile: csv file path\n"
 	"options:\n"
+	"\t--debug: print debug messages\n"
+	"\t--quite: only print error messages\n"
 	"\t--line: only parse first n lines\n"
 	"Example:\n"
 	"\tPAlogparser --line=100 test.csv\n";
@@ -96,9 +100,19 @@ int main(int argc, char **argv)
 	unsigned int parse_lines = UINT_MAX;
 	int has_data = 0;
 	int has_busy = 0;
+	//int dbg_level = L_INFO;
 
-    while ((opt=getopt_long(argc, argv, "hl:db", cmd_options, NULL)) != -1) {
+    while ((opt=getopt_long(argc, argv, "hl:dq", cmd_options, NULL)) != -1) {
 		switch (opt) {
+			case 'd':
+				//dbg_level = strtol(optarg, NULL, 0);
+				g_debug_level = L_DEBUG;
+				break;
+			case 'q':
+				//dbg_level = strtol(optarg, NULL, 0);
+				g_debug_level = L_ERROR;
+				break;
+
 			case 'l':
 				parse_lines = strtol(optarg, NULL, 0);
 				break;			

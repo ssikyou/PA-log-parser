@@ -178,17 +178,22 @@ typedef struct mmc_request {
 #define REQ_WR		1
 #define REQ_RD		2
 
-typedef struct parser_config {
+#define DATA_SIZE 1024*512
 
-
-} parser_config;
+typedef struct mmc_pending_info {
+	mmc_cmd *cmd;
+	mmc_request *req;
+	int req_type;
+} mmc_pending_info;
 
 typedef struct mmc_parser {
 	int state;
 	mmc_cmd *prev_cmd;
 	mmc_cmd *cur_cmd;
-	mmc_request * prev_req;
-	mmc_request * cur_req;
+	mmc_request *prev_req;
+	mmc_request *cur_req;
+	mmc_pending_info *pending;	//if cur req is not finished, store next req in pending
+	void *data;
 	int use_sbc;
 	int req_type;		//
 	int has_data;		//has write or read data event

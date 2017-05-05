@@ -1,7 +1,7 @@
 CC ?= gcc
 AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_FORTIFY_SOURCE=2
 INCLUDE = -I. -I ./include -I ./CsvParser/include -I ./eMMCParser
-CFLAGS ?= $(INCLUDE) -g -O2 -pie -fPIE
+CFLAGS ?= $(INCLUDE) -g -pie -fPIE #-O2
 LDFLAGS ?= -pie -fPIE
 LIBS =
 

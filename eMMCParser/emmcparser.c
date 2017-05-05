@@ -50,7 +50,7 @@ static void destroy_cmd(mmc_cmd *cmd)
 		free(cmd);
 }
 
-static mmc_request *alloc_req(unsigned int sectors)
+static mmc_request *alloc_req(mmc_parser *parser, unsigned int sectors)
 {
 	mmc_request *req = calloc(1, sizeof(mmc_request));
 	if (req == NULL) {
@@ -60,11 +60,14 @@ static mmc_request *alloc_req(unsigned int sectors)
 
 	//alloc data buf
 	if (sectors > 0) {
+		/*
 		req->data = calloc(1, sectors*512);
 		if (req->data == NULL) {
 			perror("alloc mmc request data failed");
 			goto fail_data;
-		}
+		}*/
+		memset(parser->data, 0, DATA_SIZE);
+		req->data = parser->data;
 
 		req->delay = calloc(1, sectors*sizeof(int));
 		if (req->delay == NULL) {
@@ -76,7 +79,7 @@ static mmc_request *alloc_req(unsigned int sectors)
 	return req;
 
 fail_delay:
-	free(req->data);
+	//free(req->data);
 fail_data:
 	free(req);
 fail:
@@ -94,10 +97,35 @@ static void destroy_req(mmc_request *req)
 			destroy_cmd(req->stop);
 		if (req->sectors && req->delay)
 			free(req->delay);
-		if (req->data)
-			free(req->data);
+		//if (req->data)
+		//	free(req->data);
 
 		free(req);
+	}
+}
+
+static mmc_pending_info *alloc_pending()
+{
+	mmc_pending_info *pending = calloc(1, sizeof(mmc_pending_info));
+	if (pending == NULL) {
+		perror("alloc mmc pending failed");
+	}
+
+	return pending;
+}
+
+static void destroy_pending(mmc_pending_info *pending)
+{
+	if(pending) {
+		/*
+		if (pending->cmd)
+			destroy_cmd(pending->cmd);
+
+		if (pending->req)
+			destroy_req(pending->req);
+		*/
+		free(pending);
+		pending = NULL;
 	}
 }
 
@@ -139,6 +167,12 @@ mmc_parser *mmc_parser_init(int has_data, int has_busy)
 		goto fail;
 	}
 
+	parser->data = calloc(1, DATA_SIZE);	//for one request data storage
+	if (parser->data == NULL) {
+		perror("alloc data failed");
+		goto fail_data;
+	}
+
 	INIT_LIST_HEAD(&g_requests);
 
 	parser->has_data = has_data;
@@ -146,6 +180,8 @@ mmc_parser *mmc_parser_init(int has_data, int has_busy)
 
 	return parser;
 
+fail_data:
+	free(parser);
 fail:
 	return NULL;
 }
@@ -159,6 +195,7 @@ void mmc_parser_destroy(mmc_parser *parser)
 		destroy_req(req);
 	}
 
+	free(parser->data);
 	free(parser);
 }
 
@@ -211,7 +248,16 @@ void dump_req(mmc_request *req)
 			dbg(L_DEBUG, "\t\t%d", req->delay[i]);
 		}
 		dbg(L_DEBUG, "\n");
+		
 		//dump data?
+		dbg(L_DEBUG, "\tlen_per_trans:%d all bytes:%d\n", req->len_per_trans, req->len);
+		#if 0
+		dbg(L_DEBUG, "\t\t");
+		for (i=0; i<req->len; i++) {
+			dbg(L_DEBUG, "%x ", ((unsigned char*)req->data)[i]);
+		}
+		dbg(L_DEBUG, "\n");
+		#endif
 	} else {
 
 		assert(req->cmd!=NULL);
@@ -242,6 +288,7 @@ static mmc_cmd *begin_cmd(mmc_parser *parser, unsigned char event_type, event_ti
 	cmd = alloc_cmd();
 	//fill cmd
 	cmd->cmd_index = event_type;
+	cmd->resp_type = RESP_UND;
 	//ept->parse_data(rowFields[COL_DATA], &cmd->arg);
 	//parse_event_time(rowFields[COL_TIME], &cmd->time);
 	cmd->time.time_us = time->time_us;
@@ -260,7 +307,7 @@ static void end_cmd(mmc_parser *parser)
 static mmc_request *begin_request(mmc_parser *parser, int is_sbc, mmc_cmd *cmd, int req_type, unsigned int sectors)
 {
 	mmc_request *req = NULL;
-	req = alloc_req(sectors);
+	req = alloc_req(parser, sectors);
 	req->sectors = sectors;
 
 	if (is_sbc)
@@ -283,8 +330,37 @@ static void end_request(mmc_parser *parser)
 	clear_parser_status(parser);
 }
 
+//current used for cmd13
+static void begin_pending(mmc_parser *parser, mmc_cmd *cmd, int req_type)
+{
+	dbg(L_DEBUG, "\n====start pending!====\n");
+	parser->pending = alloc_pending();
+	mmc_request *pending_req = alloc_req(parser, 0);
+				
+	parser->pending->cmd = cmd;
+	parser->pending->req = pending_req;
+	parser->pending->req->cmd = cmd;
+	parser->pending->req_type = req_type;
+}
+
+static void end_pending(mmc_parser *parser)
+{
+	dbg(L_DEBUG, "\n====end pending!====\n");
+	//set pending req to cur req
+	parser->cur_cmd = parser->pending->cmd;
+	parser->cur_req = parser->pending->req;
+	parser->req_type = parser->pending->req_type;
+	list_add_tail(&parser->cur_req->req_node, &g_requests);
+	//clean pending info
+	//parser->pending->cmd = NULL;
+	//parser->pending->req = NULL;
+	parser->pending->req_type = REQ_NONE;
+	destroy_pending(parser->pending);
+}
+
 static void calc_req_total_time(mmc_request *req, unsigned int end_time_us)
 {
+	assert(req->cmd!=NULL);
 	req->total_time = end_time_us - req->cmd->time.time_us;
 }
 
@@ -324,7 +400,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 	ret = parse_event_time(rowFields[COL_TIME], &time);
 
 	//parse_cmd_args(rowFields[COL_DATA], &row->event_data.arg);
-#if 1
+
 	//search events array to find the event template
 	for (i = 0; i < get_temp_nums()/*NELEMS(events)*/; i++) {
 		if (strncmp(events[i].event_string,
@@ -339,7 +415,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 		error("do not find the event template for %s!\n", rowFields[COL_TYPE]);
 		return -1;
 	}
-	dbg(L_INFO, "event:%s\n", ept->event_string);
+	dbg(L_INFO, "[%d]event:%s\n", event_id, ept->event_string);
 
 	event_type = ept->event_type;
 
@@ -397,11 +473,20 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 		break;
 
 		case TYPE_12:
-			parser->cur_req->stop = cmd;	
+			if (parser->cur_req)
+				parser->cur_req->stop = cmd;
+			else
+				begin_request(parser, 0, cmd, REQ_NORMAL, 0);
 		break;
 
+		//cmd13 can be sent while the bus is still busy
 		case TYPE_13:
-			begin_request(parser, 0, cmd, REQ_NORMAL, 0);
+			if (!parser->cur_req) {	//cur req is finished
+				begin_request(parser, 0, cmd, REQ_NORMAL, 0);
+			} else {	//cur req is not finished, is still busy, maybe cmd6 or write
+				dbg(L_DEBUG, "cur req is not finished, store in pending!\n");
+				begin_pending(parser, cmd, REQ_NORMAL);
+			}
 		break;
 
 		case TYPE_17:
@@ -453,12 +538,13 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 		case TYPE_WR:
 			//parse data to req's data area
 			if (strlen(rowFields[COL_DATA])/2 < 512) {
-				// not enough data, do not parse
-				dbg(L_DEBUG, "no enough data, do not parse\n");
-			} else {
-				ept->parse_data(rowFields[COL_DATA], (unsigned char*)parser->cur_req->data + parser->cur_req->len);
-				parser->cur_req->len += 512;
+				// not enough data
+				dbg(L_DEBUG, "no enough data\n");
 			}
+
+			parser->cur_req->len_per_trans = ept->parse_data(rowFields[COL_DATA], (unsigned char*)parser->cur_req->data + parser->cur_req->len);
+			parser->cur_req->len += parser->cur_req->len_per_trans;
+			dbg(L_DEBUG, "len_per_trans:%d, trans len:%d\n", parser->cur_req->len_per_trans, parser->cur_req->len);
 
 			parser->trans_cnt++;
 
@@ -511,6 +597,10 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 				calc_req_total_time(parser->cur_req, time.time_us);
 
 				end_request(parser);
+
+				if (parser->pending) {
+					end_pending(parser);
+				}
 			}
 		}
 		break;
@@ -520,12 +610,13 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 			if (parser->req_type == REQ_RD) {
 				//parse data to req's data area
 				if (strlen(rowFields[COL_DATA])/2 < 512) {
-					// not enough data, do not parse
-					dbg(L_DEBUG, "no enough data, do not parse\n");
-				} else {
-					ept->parse_data(rowFields[COL_DATA], (unsigned char*)parser->cur_req->data + parser->cur_req->len);
-					parser->cur_req->len += 512;
-				}
+					// not enough data
+					dbg(L_DEBUG, "no enough data\n");
+				} 
+
+				parser->cur_req->len_per_trans = ept->parse_data(rowFields[COL_DATA], (unsigned char*)parser->cur_req->data + parser->cur_req->len);
+				parser->cur_req->len += parser->cur_req->len_per_trans;
+				dbg(L_DEBUG, "len_per_trans:%d, trans len:%d\n", parser->cur_req->len_per_trans, parser->cur_req->len);
 
 				parser->trans_cnt++;
 
@@ -568,6 +659,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 				case TYPE_16:
 				case TYPE_35:
 				case TYPE_36:
+				assert(parser->cur_req!=NULL);
 					calc_req_total_time(parser->cur_req, time.time_us);
 					end_request(parser);
 				break;
@@ -683,9 +775,6 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 			exit(EXIT_FAILURE);
 		break;
 	}
-
-#endif
-
 
 	//destroy_mmc_row(row);
 
