@@ -104,30 +104,13 @@ typedef struct event_parse_template {
 	int (* parse_clock)(void *clock, void *out);
 } event_parse_template;
 
-typedef struct CMD25Info {
-	unsigned int total_time;
-	unsigned int address;
-	unsigned int sectors;
-	unsigned short max_busy_t;
-	unsigned short busy_t[];
-} CMD25Info;
-
-typedef struct CMD18Info {
-	unsigned int total_time;
-	unsigned int address;
-	unsigned int sectors;
-	unsigned short max_nac;
-	unsigned short nac[];
-} CMD18Info;
-
-typedef struct stats {
-	struct list_head all_events;
+typedef struct mmc_stats {
+	struct list_head requests_list;
 	struct list_head cmd25_list;
 	struct list_head cmd18_list;
 	struct list_head cmd24_list;
 	struct list_head cmd17_list;
-	struct list_head requests_list;
-} stats;
+} mmc_stats;
 
 #define RESP_R1  	0
 #define RESP_R1B  	1
@@ -200,6 +183,7 @@ typedef struct mmc_parser {
 	int has_busy;		//has busy event
 	int trans_cnt;		//already transfered sector count
 
+	mmc_stats stats;
 } mmc_parser;
 
 /* emmc parser functions */

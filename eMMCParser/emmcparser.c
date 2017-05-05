@@ -16,7 +16,6 @@
 #include "common.h"
 
 extern event_parse_template events[];
-struct list_head g_requests;
 
 static mmc_row *alloc_mmc_row()
 {
@@ -173,7 +172,11 @@ mmc_parser *mmc_parser_init(int has_data, int has_busy)
 		goto fail_data;
 	}
 
-	INIT_LIST_HEAD(&g_requests);
+	INIT_LIST_HEAD(&parser->stats.requests_list);
+	INIT_LIST_HEAD(&parser->stats.cmd25_list);
+	INIT_LIST_HEAD(&parser->stats.cmd24_list);
+	INIT_LIST_HEAD(&parser->stats.cmd18_list);
+	INIT_LIST_HEAD(&parser->stats.cmd17_list);
 
 	parser->has_data = has_data;
 	parser->has_busy = has_busy;
@@ -190,7 +193,7 @@ void mmc_parser_destroy(mmc_parser *parser)
 {
 	mmc_request *req, *tmp;
 
-	list_for_each_entry_safe(req, tmp, &g_requests, req_node) {
+	list_for_each_entry_safe(req, tmp, &parser->stats.requests_list, req_node) {
 		list_del(&req->req_node);
 		destroy_req(req);
 	}
@@ -317,7 +320,7 @@ static mmc_request *begin_request(mmc_parser *parser, int is_sbc, mmc_cmd *cmd, 
 
 	parser->cur_req = req;
 	parser->req_type = req_type;
-	list_add_tail(&req->req_node, &g_requests);
+	list_add_tail(&req->req_node, &parser->stats.requests_list);
 
 	return req;
 }
@@ -325,6 +328,8 @@ static mmc_request *begin_request(mmc_parser *parser, int is_sbc, mmc_cmd *cmd, 
 static void end_request(mmc_parser *parser)
 {
 	dbg(L_DEBUG, "\n====end of current request!====\n");
+	if (parser->cur_req->cmd->cmd_index==TYPE_18)
+		list_add_tail(&req->req_node, &parser->stats.cmd18_list);
 	parser->prev_req = parser->cur_req;
 	parser->cur_req = NULL;
 	clear_parser_status(parser);
@@ -350,7 +355,7 @@ static void end_pending(mmc_parser *parser)
 	parser->cur_cmd = parser->pending->cmd;
 	parser->cur_req = parser->pending->req;
 	parser->req_type = parser->pending->req_type;
-	list_add_tail(&parser->cur_req->req_node, &g_requests);
+	list_add_tail(&parser->cur_req->req_node, &parser->stats.requests_list);
 	//clean pending info
 	//parser->pending->cmd = NULL;
 	//parser->pending->req = NULL;

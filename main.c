@@ -17,7 +17,6 @@
 
 //int g_debug_level = L_DEBUG;
 int g_debug_level = L_INFO;
-extern struct list_head g_requests;
 
 int exec_shell(char *str)
 {
@@ -166,7 +165,7 @@ int main(int argc, char **argv)
         CsvParser_destroy_row(row);
     }
 
-    dump_req_list(&g_requests);
+    dump_req_list(&parser->stats.requests_list);
 
     CsvParser_destroy(csvparser);
 
