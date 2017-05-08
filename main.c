@@ -143,6 +143,7 @@ int main(int argc, char **argv)
 
 	mmc_parser *parser = mmc_parser_init(has_data, has_busy);
 
+	mmc_cb_init(parser);
 #if 1
 	unsigned int cur_line = 1;
 	//int i =  0;
@@ -171,6 +172,7 @@ int main(int argc, char **argv)
     //g_debug_level = L_DEBUG;
     dump_req_list(&parser->stats.requests_list);
     //dump_req_list(&parser->stats.cmd18_list);
+    generate_xls(parser);
 
     CsvParser_destroy(csvparser);
 

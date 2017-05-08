@@ -178,6 +178,8 @@ mmc_parser *mmc_parser_init(int has_data, int has_busy)
 	INIT_LIST_HEAD(&parser->stats.cmd18_list);
 	INIT_LIST_HEAD(&parser->stats.cmd17_list);
 
+	INIT_LIST_HEAD(&parser->cb_list);
+
 	parser->has_data = has_data;
 	parser->has_busy = has_busy;
 
@@ -328,9 +330,13 @@ static mmc_request *begin_request(mmc_parser *parser, int is_sbc, mmc_cmd *cmd, 
 static void end_request(mmc_parser *parser)
 {
 	dbg(L_DEBUG, "\n====end of current request!====\n");
+	mmc_req_cb *cb;
 	//if (parser->cur_req->cmd->cmd_index==TYPE_18)
 		//list_add_tail(&parser->cur_req->req_node, &parser->stats.cmd18_list);
-	//list_for_each_entry(req, list, req_node) {}
+	list_for_each_entry(cb, &parser->cb_list, cb_node) {
+		dbg(L_DEBUG, "doing callback: %s\n", cb->desc);
+		cb->func(parser, cb->arg);
+	}
 
 	parser->prev_req = parser->cur_req;
 	parser->cur_req = NULL;

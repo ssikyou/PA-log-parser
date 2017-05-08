@@ -192,14 +192,15 @@ typedef struct mmc_parser {
 	int trans_cnt;		//already transfered sector count
 
 	mmc_stats stats;
+	struct list_head cb_list;
 } mmc_parser;
 
 /* emmc parser functions */
 mmc_parser *mmc_parser_init(int parse_data, int parse_busy);
 void mmc_parser_destroy(mmc_parser *parser);
 int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum);
-int mmc_register_req_cb(mmc_req_cb *cb);
-
+int mmc_cb_init(mmc_parser *parser);
+int mmc_register_req_cb(mmc_parser *parser, mmc_req_cb *cb);
 
 int parse_event_id(void *data, unsigned int *out);
 int parse_event_time(void *data, event_time *out);
