@@ -1,9 +1,9 @@
 CC ?= gcc
 AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_FORTIFY_SOURCE=2
-INCLUDE = -I. -I ./include -I ./CsvParser/include -I ./eMMCParser
-CFLAGS ?= $(INCLUDE) -g -pie -fPIE #-O2
-LDFLAGS ?= -pie -fPIE
-LIBS =
+INCLUDE = -I. -I ./include -I ./CsvParser/include -I ./eMMCParser -I ./libxlsxwriter/include -I ./glib/include/glib-2.0 -I ./glib/lib/glib-2.0/include
+CFLAGS ?= $(INCLUDE) -g #-static -O2 -pie -fPIE
+LDFLAGS ?= -L ./libxlsxwriter/lib -L ./glib/lib #-static -pie -fPIE
+LIBS = -lxlsxwriter -lz -lglib-2.0 -pthread
 
 CHECKFLAGS = -Wall -Wuninitialized -Wundef -w#-Werror 
 

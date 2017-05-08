@@ -328,8 +328,10 @@ static mmc_request *begin_request(mmc_parser *parser, int is_sbc, mmc_cmd *cmd, 
 static void end_request(mmc_parser *parser)
 {
 	dbg(L_DEBUG, "\n====end of current request!====\n");
-	if (parser->cur_req->cmd->cmd_index==TYPE_18)
-		list_add_tail(&req->req_node, &parser->stats.cmd18_list);
+	//if (parser->cur_req->cmd->cmd_index==TYPE_18)
+		//list_add_tail(&parser->cur_req->req_node, &parser->stats.cmd18_list);
+	//list_for_each_entry(req, list, req_node) {}
+
 	parser->prev_req = parser->cur_req;
 	parser->cur_req = NULL;
 	clear_parser_status(parser);

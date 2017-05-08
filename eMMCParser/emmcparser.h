@@ -148,6 +148,14 @@ typedef struct mmc_request {
 	unsigned int *delay;		//for wr busy, for rd Nac
 } mmc_request;
 
+struct mmc_parser;
+typedef struct mmc_req_cb {
+	struct list_head cb_node;
+	char *desc;
+	int (* func)(struct mmc_parser *parser, void *arg);
+	void *arg;
+} mmc_req_cb;
+
 #define STATE_NONE		-1
 #define STATE_OPEN_WR	0
 #define STATE_OPEN_RD	1
@@ -190,6 +198,8 @@ typedef struct mmc_parser {
 mmc_parser *mmc_parser_init(int parse_data, int parse_busy);
 void mmc_parser_destroy(mmc_parser *parser);
 int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum);
+int mmc_register_req_cb(mmc_req_cb *cb);
+
 
 int parse_event_id(void *data, unsigned int *out);
 int parse_event_time(void *data, event_time *out);
