@@ -267,3 +267,108 @@ int parse_event_time(void *data, event_time *out)
 
 	return 0;
 }
+
+int is_cmd(unsigned char event_type)
+{
+	int ret = 0;
+
+	if (event_type>=0 && event_type < TYPE_WR)
+		ret = 1;
+
+	return ret;
+}
+
+int is_wr_cmd(unsigned char event_type)
+{
+	int ret = 0;
+
+	if (event_type == TYPE_25 || event_type == TYPE_24)
+		ret = 1;
+
+	return ret;
+}
+
+int is_rd_cmd(unsigned char event_type)
+{
+	int ret = 0;
+
+	if (event_type == TYPE_17 || event_type == TYPE_18)
+		ret = 1;
+
+	return ret;
+}
+
+void dump_req_list(struct list_head *list)
+{
+	mmc_request *req;
+
+	list_for_each_entry(req, list, req_node) {
+
+		dump_req(req);
+	}
+
+}
+
+void dump_cmd(mmc_cmd *cmd)
+{
+	dbg(L_DEBUG, "\tcmd index:%d arg:0x%x sendtime:%dus interval:%dus\n", 
+		cmd->cmd_index, cmd->arg, cmd->time.time_us, cmd->time.interval_us);
+	if (cmd->resp_type == RESP_R1)
+		dbg(L_DEBUG, "\t\tresp type R1, value:0x%x\n", cmd->resp.r1);
+	else if (cmd->resp_type == RESP_R1B)
+		dbg(L_DEBUG, "\t\tresp type R1B, value:0x%x\n", cmd->resp.r1b);
+	else if (cmd->resp_type == RESP_R2)
+		dbg(L_DEBUG, "\t\tresp type R2(msb->lsb), value:0x%x %x %x %x\n", cmd->resp.r2[3], cmd->resp.r2[2], cmd->resp.r2[1], cmd->resp.r2[0]);
+	else if (cmd->resp_type == RESP_R3)
+		dbg(L_DEBUG, "\t\tresp type R3, value:0x%x\n", cmd->resp.r3);
+	else
+		dbg(L_DEBUG, "\t\tunknow resp type\n");
+
+}
+
+void dump_req(mmc_request *req)
+{
+	int i;
+	dbg(L_DEBUG, "request total time:%dus\n", req->total_time);
+	if (is_wr_cmd(req->cmd->cmd_index) || is_rd_cmd(req->cmd->cmd_index)) {
+
+		if (req->sbc)
+			dump_cmd(req->sbc);
+
+		assert(req->cmd!=NULL); 
+		dump_cmd(req->cmd);
+
+		if (req->stop)
+			dump_cmd(req->stop);
+
+		//dump delay
+		dbg(L_DEBUG, "\tbusy or nac:\n");
+		for (i=0; i<req->sectors; i++) {
+			dbg(L_DEBUG, "\t\t%d", req->delay[i]);
+		}
+		dbg(L_DEBUG, "\n");
+		dbg(L_DEBUG, "\tmax delay:%d\n", req->max_delay);
+		//dump data?
+		dbg(L_DEBUG, "\tlen_per_trans:%d all bytes:%d\n", req->len_per_trans, req->len);
+		#if 0
+		dbg(L_DEBUG, "\t\t");
+		for (i=0; i<req->len; i++) {
+			dbg(L_DEBUG, "%x ", ((unsigned char*)req->data)[i]);
+		}
+		dbg(L_DEBUG, "\n");
+		#endif
+	} else {
+
+		assert(req->cmd!=NULL);
+		dump_cmd(req->cmd);
+
+		if (req->stop)
+			dump_cmd(req->stop);
+
+		if (req->cmd->cmd_index == TYPE_6) {
+			dbg(L_DEBUG, "\tbusy: %d\n", (int)(req->delay));
+		}
+
+	}
+
+}

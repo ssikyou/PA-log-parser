@@ -172,7 +172,8 @@ int main(int argc, char **argv)
     //g_debug_level = L_DEBUG;
     dump_req_list(&parser->stats.requests_list);
     //dump_req_list(&parser->stats.cmd18_list);
-    generate_xls(parser);
+    //generate_xls(parser);
+    generate_xls_busy_dist(parser, "busy_dist.xlsx", 20);
 
     CsvParser_destroy(csvparser);
 

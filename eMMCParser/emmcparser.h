@@ -2,6 +2,7 @@
 #define _MMCPARSER_H_
 
 #include "list.h"
+#include "glib.h"
 
 #define COL_ID 		0
 #define COL_TIME 	1
@@ -106,7 +107,8 @@ typedef struct event_parse_template {
 
 typedef struct mmc_stats {
 	struct list_head requests_list;
-	struct list_head cmd25_list;
+	GSList *cmd25_list;
+	//struct list_head cmd25_list;
 	struct list_head cmd18_list;
 	struct list_head cmd24_list;
 	struct list_head cmd17_list;
@@ -146,6 +148,7 @@ typedef struct mmc_request {
 	//for performance analysis
 	unsigned int total_time;	//includes delay time
 	unsigned int *delay;		//for wr busy, for rd Nac
+	unsigned int max_delay;
 } mmc_request;
 
 struct mmc_parser;
