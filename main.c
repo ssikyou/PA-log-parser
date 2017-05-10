@@ -137,13 +137,18 @@ int main(int argc, char **argv)
 	search_csv(argv[0], &has_data, &has_busy);
 
 	if (!has_data)
-		dbg(L_INFO, "The log file has no data info, we can not parse the read latency time!\n");
+		error("The log file has no data info, we can not parse the read latency time!\n");
 	if (!has_busy)
-		dbg(L_INFO, "The log file has no busy info, we can not parse the write busy time and the request's total time is not accurate!\n");
+		error("The log file has no busy info, we can not parse the write busy time and the request's total time is not accurate!\n");
 
-	mmc_parser *parser = mmc_parser_init(has_data, has_busy);
+	mmc_parser *parser = mmc_parser_init(has_data, has_busy, "parser.conf");
 
+	//register request callback
 	mmc_cb_init(parser);
+
+	//register xls callback
+	mmc_xls_init(parser);
+
 #if 1
 	unsigned int cur_line = 1;
 	//int i =  0;
@@ -171,39 +176,12 @@ int main(int argc, char **argv)
 
     //g_debug_level = L_DEBUG;
     dump_req_list(&parser->stats.requests_list);
-    //dump_req_list(&parser->stats.cmd18_list);
-    //generate_xls(parser);
-    generate_xls_busy_dist(parser, "busy_dist.xlsx", 20);
+
+    generate_xls(parser);
 
     CsvParser_destroy(csvparser);
 
 	mmc_parser_destroy(parser);
-#endif
-
-#if 0
-	lxw_workbook  *workbook  = workbook_new("hello_world.xlsx");
-    lxw_worksheet *worksheet = workbook_add_worksheet(workbook, NULL);
-
-    worksheet_write_string(worksheet, 0, 0, "Hello", NULL);
-    worksheet_write_number(worksheet, 1, 0, 123, NULL);
-
-    workbook_close(workbook);
-#endif
-
-#if 0
-	printf("Glib version: %u.%u.%u\n\n",glib_major_version,glib_minor_version,glib_micro_version);
-
-	GHashTable* hash = g_hash_table_new(g_str_hash, g_str_equal);
-	g_hash_table_insert(hash, "Virginia", "Richmond");
-	g_hash_table_insert(hash, "Texas", "Austin");
-	g_hash_table_insert(hash, "Ohio", "Columbus");
-
-	printf("There are %d keys in the hash\n",g_hash_table_size(hash));
-	printf("The capital of Texas is %s\n",g_hash_table_lookup(hash, "Texas"));
-	gboolean found = g_hash_table_remove(hash, "Virginia");
-	printf("The value 'Virginia' was %sfound and removed\n", found ? "" : "not ");
-
-	g_hash_table_destroy(hash);
 #endif
 
 	dbg(L_DEBUG, "parse end!!!\n");

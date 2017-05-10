@@ -129,7 +129,7 @@ static void destroy_pending(mmc_pending_info *pending)
 	}
 }
 
-mmc_parser *mmc_parser_init(int has_data, int has_busy)
+mmc_parser *mmc_parser_init(int has_data, int has_busy, char *config_file)
 {
 	mmc_parser *parser = calloc(1, sizeof(mmc_parser));
 	if (parser == NULL) {
@@ -143,20 +143,27 @@ mmc_parser *mmc_parser_init(int has_data, int has_busy)
 		goto fail_data;
 	}
 
+	GKeyFile* gkf = g_key_file_new();
+	if (!g_key_file_load_from_file(gkf, config_file, G_KEY_FILE_NONE, NULL)){
+        perror("could not read config file");
+        goto fail_config;
+    }
+    parser->gkf = gkf;
+
 	INIT_LIST_HEAD(&parser->stats.requests_list);
 	parser->stats.cmd25_list = NULL;
-	//INIT_LIST_HEAD(&parser->stats.cmd25_list);
-	INIT_LIST_HEAD(&parser->stats.cmd24_list);
-	INIT_LIST_HEAD(&parser->stats.cmd18_list);
-	INIT_LIST_HEAD(&parser->stats.cmd17_list);
+	parser->stats.cmd18_list = NULL;
 
 	INIT_LIST_HEAD(&parser->cb_list);
+	parser->xls_list = NULL;
 
 	parser->has_data = has_data;
 	parser->has_busy = has_busy;
 
 	return parser;
 
+fail_config:
+	free(parser->data);
 fail_data:
 	free(parser);
 fail:
@@ -174,6 +181,15 @@ void mmc_parser_destroy(mmc_parser *parser)
 
 	if (parser->stats.cmd25_list)
 		g_slist_free(parser->stats.cmd25_list);
+
+	if (parser->stats.cmd18_list)
+		g_slist_free(parser->stats.cmd18_list);
+
+	if (parser->xls_list)
+		mmc_destroy_xls_list(parser->xls_list);
+
+	if (parser->gkf)
+		g_key_file_free (parser->gkf);
 
 	free(parser->data);
 	free(parser);

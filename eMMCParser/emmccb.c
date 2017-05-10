@@ -112,7 +112,7 @@ int mmc_cb_init(mmc_parser *parser)
 }
 
 
-
+/*======================XLS and Charts Related Functions===========================*/
 typedef struct xls_data_entry
 {
 	int idx;
@@ -120,6 +120,38 @@ typedef struct xls_data_entry
 	int val;
 	char *val_desc;
 } xls_data_entry;
+
+typedef struct xls_area {
+	int first_row;
+	int first_col;
+	int last_row;
+	int last_col;
+} xls_area;
+
+typedef struct xls_config {
+	char *filename;
+	int x_steps;
+
+	unsigned char chart_type;
+	char *chart_title_name;
+	char *serie_name;
+	char *chart_x_name;
+	char *chart_y_name;
+	xls_area x1_area;	//chart x asix's data cell range
+	xls_area y1_area;	//chart y asix's data cell range
+	xls_area x2_area;
+	xls_area y2_area;
+} xls_config;
+
+typedef struct mmc_xls_cb {
+	char *desc;
+	void *(* prep_data)(mmc_parser *parser, xls_config *config);
+	int (* write_data)(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_config *config);
+	int (* create_chart)(lxw_workbook *workbook, lxw_worksheet *worksheet, xls_config *config);
+	void (* release_data)(void *data);
+
+	xls_config *config;
+} mmc_xls_cb;
 
 void print_xls_entry(gpointer item, gpointer user_data) {
 	xls_data_entry *entry = item;
@@ -148,8 +180,7 @@ gint find_acs(gconstpointer item1, gconstpointer item2) {
 		return 0;
 }
 
-
-void *prep_data(mmc_parser *parser, int steps)
+void *prep_data_w_busy(mmc_parser *parser, xls_config *config)
 {
 	int max_delay_time = 0;
 	mmc_request *req;
@@ -167,7 +198,7 @@ void *prep_data(mmc_parser *parser, int steps)
 	for (iterator = cmd25_list; iterator; iterator = iterator->next) {
 
 		req = (mmc_request *)iterator->data;
-		int index = req->max_delay/steps;
+		int index = req->max_delay/config->x_steps;
 		
 		dbg(L_DEBUG, "index:%d\n", index);
 		item = g_slist_find_custom(busy_list, &index, (GCompareFunc)find_index);
@@ -179,7 +210,7 @@ void *prep_data(mmc_parser *parser, int steps)
 			xls_data_entry *entry = calloc(1, sizeof(xls_data_entry));
 			entry->idx = index;
 			char tmp[16];
-			snprintf(tmp, sizeof(tmp), "[%d~%d)", index*steps, (index+1)*steps);
+			snprintf(tmp, sizeof(tmp), "[%d~%d)", index*config->x_steps, (index+1)*config->x_steps);
 			entry->idx_desc = strdup(tmp);
 
 			entry->val = 1;
@@ -198,36 +229,18 @@ void *prep_data(mmc_parser *parser, int steps)
 	return busy_list;
 }
 
-void destroy_xls_entry(gpointer data)
-{
-	xls_data_entry *entry = data;
-	if (entry->idx_desc)
-		free(entry->idx_desc);
-}
-
-void destroy_data(void *data)
-{
-	GSList *busy_list = data;
-	g_slist_free_full(busy_list, (GDestroyNotify)destroy_xls_entry);
-}
-
-typedef struct xls_area {
-	int first_row;
-	int first_col;
-	int last_row;
-	int last_col;
-} xls_area;
-void write_worksheet_data(lxw_worksheet *worksheet, void *data, xls_area *x_area, xls_area *y_area)
+int write_data_w_busy(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_config *config)
 {
 	GSList *busy_list = data;
 	GSList *iterator = NULL;
 	int row=0, col=0;
-	char x_desc[] = "Busy Range/us";
-	char y_desc[] = "Counts";
 
-	worksheet_write_string(worksheet, CELL("A1"), "ID", NULL);
-    worksheet_write_string(worksheet, CELL("B1"), x_desc, NULL);
-    worksheet_write_string(worksheet, CELL("C1"), y_desc, NULL);
+	lxw_format *bold = workbook_add_format(workbook);
+    format_set_bold(bold);
+
+	worksheet_write_string(worksheet, CELL("A1"), "ID", bold);
+    worksheet_write_string(worksheet, CELL("B1"), config->chart_x_name, bold);
+    worksheet_write_string(worksheet, CELL("C1"), config->chart_y_name, bold);
     row=1;
     //g_slist_foreach(busy_list, (GFunc)write_row, NULL);
 	for (iterator = busy_list; iterator; iterator = iterator->next) {
@@ -239,40 +252,32 @@ void write_worksheet_data(lxw_worksheet *worksheet, void *data, xls_area *x_area
   		col=0;
  	}
 
- 	x_area->first_row = 1;
- 	x_area->first_col = 1;
- 	x_area->last_row = row-1;
- 	x_area->last_col = 1;
+ 	config->x1_area.first_row = 1;
+ 	config->x1_area.first_col = 1;
+ 	config->x1_area.last_row = row-1;
+ 	config->x1_area.last_col = 1;
 
- 	y_area->first_row = 1;
- 	y_area->first_col = 2;
- 	y_area->last_row = row-1;
- 	y_area->last_col = 2;
+ 	config->y1_area.first_row = 1;
+ 	config->y1_area.first_col = 2;
+ 	config->y1_area.last_row = row-1;
+ 	config->y1_area.last_col = 2;
 
+ 	return 0;
 }
 
-int generate_xls_busy_dist(mmc_parser *parser, char *filename, int steps)
+int create_chart(lxw_workbook *workbook, lxw_worksheet *worksheet, xls_config *config)
 {
-	lxw_workbook  *workbook  = workbook_new(filename);
-    lxw_worksheet *worksheet = workbook_add_worksheet(workbook, NULL);
-
-    xls_area xa, ya;
-
-    //prepare data
-   	void *data = prep_data(parser, steps);
-    //write data to sheet
-    write_worksheet_data(worksheet, data, &xa, &ya);
-
-    //create chart
-    lxw_chart *chart = workbook_add_chart(workbook, LXW_CHART_COLUMN);
+	//create chart
+    lxw_chart *chart = workbook_add_chart(workbook, config->chart_type);
     lxw_chart_series *series = chart_add_series(chart, NULL, NULL);
 
-    chart_series_set_categories(series, "Sheet1", xa.first_row, xa.first_col, xa.last_row, xa.last_col);
-    chart_series_set_values(series,     "Sheet1", ya.first_row, ya.first_col, ya.last_row, ya.last_col);
+    chart_series_set_categories(series, "Sheet1", config->x1_area.first_row, config->x1_area.first_col, config->x1_area.last_row, config->x1_area.last_col);
+    chart_series_set_values(series, "Sheet1", config->y1_area.first_row, config->y1_area.first_col, config->y1_area.last_row, config->y1_area.last_col);
+    chart_series_set_name(series, config->serie_name);
 
-    chart_title_set_name(chart, "CMD25 Max Busy Distribution");
-    chart_axis_set_name(chart->x_axis, "Busy Range");
-    chart_axis_set_name(chart->y_axis, "Request Counts");
+    chart_title_set_name(chart, config->chart_title_name);
+    chart_axis_set_name(chart->x_axis, config->chart_x_name);
+    chart_axis_set_name(chart->y_axis, config->chart_y_name);
 
 	lxw_image_options options = {	.x_offset = 0,
 									.y_offset = 0,
@@ -282,9 +287,124 @@ int generate_xls_busy_dist(mmc_parser *parser, char *filename, int steps)
 
     worksheet_insert_chart_opt(worksheet, CELL("F4"), chart, &options);
 
-    workbook_close(workbook);
+    return 0;
+}
 
-    destroy_data(data);
+void destroy_xls_entry(gpointer data)
+{
+	xls_data_entry *entry = data;
+	if (entry->idx_desc)
+		free(entry->idx_desc);
+}
+
+void release_data_w_busy(void *data)
+{
+	GSList *busy_list = data;
+	g_slist_free_full(busy_list, (GDestroyNotify)destroy_xls_entry);
+}
+
+mmc_xls_cb *alloc_xls_cb()
+{
+	mmc_xls_cb *cb = calloc(1, sizeof(mmc_xls_cb));
+	if (cb == NULL) {
+		perror("alloc mmc xls cb failed");
+		goto fail;
+	}
+
+	xls_config *config = calloc(1, sizeof(xls_config));
+	if (config == NULL) {
+		perror("alloc mmc xls config failed");
+		goto fail_config;
+	}
+	cb->config = config;
+
+
+	return cb;
+
+fail_config:
+	free(cb);
+fail:
+	return NULL;
+}
+
+void destroy_xls_cb(gpointer data)
+{
+	mmc_xls_cb *cb = data;
+	if (cb->config)
+		free(cb->config);
+	free(cb);
+}
+
+int mmc_register_xls_cb(mmc_parser *parser, mmc_xls_cb *cb)
+{
+	parser->xls_list = g_slist_append(parser->xls_list, cb);
+	return 0;
+}
+
+void mmc_destroy_xls_list(GSList *list)
+{
+	g_slist_free_full(list, (GDestroyNotify)destroy_xls_cb);
+}
+
+int mmc_xls_init(mmc_parser *parser)
+{
+	GKeyFile* gkf = parser->gkf;
+	GError *error;
+
+	if (parser->has_busy && g_key_file_has_group(gkf, "Write Busy Dist")) {
+    	char *filename = g_key_file_get_value(gkf, "Write Busy Dist", "file_name", &error);
+    	if (filename == NULL) {
+    		filename = "default_w_busy.xlsx";
+    	}
+    	int x_steps = g_key_file_get_integer(gkf, "Write Busy Dist", "x_steps", &error);
+    	if (x_steps == 0) {
+    		x_steps = 20;
+    	}
+
+		//alloc xls callback
+		mmc_xls_cb *cb = alloc_xls_cb();
+		//init
+		cb->desc = "Write Busy Dist";
+		cb->prep_data = prep_data_w_busy;
+		cb->write_data = write_data_w_busy;
+		cb->create_chart = create_chart;
+		cb->release_data = release_data_w_busy;
+
+		cb->config->filename = filename;
+		cb->config->x_steps = x_steps;
+		cb->config->chart_type = LXW_CHART_COLUMN;
+		cb->config->chart_title_name = "CMD25 Max Busy Distribution";
+		cb->config->serie_name = "Busy Dist";
+		cb->config->chart_x_name = "Busy Range/us";
+		cb->config->chart_y_name = "Request Counts";
+
+		mmc_register_xls_cb(parser, cb);
+    }
+
+}
+
+int generate_xls(mmc_parser *parser)
+{
+	GSList *xls_list = parser->xls_list;
+	GSList *iterator = NULL;
+
+	for (iterator = xls_list; iterator; iterator = iterator->next) {
+		mmc_xls_cb *xls_cb = (mmc_xls_cb *)iterator->data;
+		
+		lxw_workbook *workbook  = workbook_new(xls_cb->config->filename);
+	    lxw_worksheet *worksheet = workbook_add_worksheet(workbook, NULL);
+
+	    //prepare data
+	   	void *data = xls_cb->prep_data(parser, xls_cb->config);
+	    //write data to sheet
+	    xls_cb->write_data(workbook, worksheet, data, xls_cb->config);
+	    //create charts
+	    xls_cb->create_chart(workbook, worksheet, xls_cb->config);
+
+	    workbook_close(workbook);
+
+	    xls_cb->release_data(data);
+	}
 
 	return 0;
 }

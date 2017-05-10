@@ -5,7 +5,7 @@ CFLAGS ?= $(INCLUDE) -g #-static -O2 -pie -fPIE
 LDFLAGS ?= -L ./libxlsxwriter/lib -L ./glib/lib #-static -pie -fPIE
 LIBS = -lxlsxwriter -lz -lglib-2.0 -pthread
 
-CHECKFLAGS = -Wall -Wuninitialized -Wundef -w#-Werror 
+CHECKFLAGS = -Wall -Wuninitialized -Wundef -w#-Werror
 
 #DEPFLAGS = -Wp,-MMD,$(@D)/.$(@F).d,-MT,$@
 

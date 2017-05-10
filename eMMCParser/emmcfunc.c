@@ -15,6 +15,14 @@
 #include "common.h"
 #include "emmcparser.h"
 
+int parse_cmd_args(void *data, unsigned int *out);
+int parse_cmd_sc(void *data, unsigned int *out);
+int parse_resp_r1(void *data, unsigned int *out);
+int parse_rw_data(void *data, void *out);
+int parse_wr_busy(void *data, unsigned int *out);
+int parse_rd_waittime(void *data, unsigned int *out);
+int parse_resp_r2(void *data, unsigned int *out);
+
 event_parse_template events[] = {
 	{TYPE_0, " CMD00(GO_PRE_IDLE_STATE)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_0, " CMD00(GO_IDLE_STATE)", parse_cmd_args, NULL, NULL, NULL},

@@ -108,10 +108,8 @@ typedef struct event_parse_template {
 typedef struct mmc_stats {
 	struct list_head requests_list;
 	GSList *cmd25_list;
-	//struct list_head cmd25_list;
-	struct list_head cmd18_list;
-	struct list_head cmd24_list;
-	struct list_head cmd17_list;
+	GSList *cmd18_list;
+
 } mmc_stats;
 
 #define RESP_R1  	0
@@ -194,25 +192,22 @@ typedef struct mmc_parser {
 	int has_busy;		//has busy event
 	int trans_cnt;		//already transfered sector count
 
+	GKeyFile* gkf;		//read config file
 	mmc_stats stats;
 	struct list_head cb_list;
+	GSList *xls_list;
 } mmc_parser;
 
 /* emmc parser functions */
-mmc_parser *mmc_parser_init(int parse_data, int parse_busy);
+mmc_parser *mmc_parser_init(int parse_data, int parse_busy, char *config_file);
 void mmc_parser_destroy(mmc_parser *parser);
 int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum);
 int mmc_cb_init(mmc_parser *parser);
 int mmc_register_req_cb(mmc_parser *parser, mmc_req_cb *cb);
+int mmc_xls_init(mmc_parser *parser);
+int generate_xls(mmc_parser *parser);
 
 int parse_event_id(void *data, unsigned int *out);
 int parse_event_time(void *data, event_time *out);
-int parse_cmd_args(void *data, unsigned int *out);
-int parse_cmd_sc(void *data, unsigned int *out);
-int parse_resp_r1(void *data, unsigned int *out);
-int parse_rw_data(void *data, void *out);
-int parse_wr_busy(void *data, unsigned int *out);
-int parse_rd_waittime(void *data, unsigned int *out);
-int parse_resp_r2(void *data, unsigned int *out);
 
 #endif
