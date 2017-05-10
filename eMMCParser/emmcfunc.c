@@ -350,7 +350,7 @@ void dump_req(mmc_request *req)
 			dump_cmd(req->stop);
 
 		//dump delay
-		dbg(L_DEBUG, "\tbusy or nac:\n");
+		dbg(L_DEBUG, "\tbusy or latency:\n");
 		for (i=0; i<req->sectors; i++) {
 			dbg(L_DEBUG, "\t\t%d", req->delay[i]);
 		}

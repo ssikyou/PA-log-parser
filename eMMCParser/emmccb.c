@@ -18,10 +18,10 @@
 #include "glib.h"
 
 static int classify_req(struct mmc_parser *parser, void *arg);
-static int calc_max_busy(struct mmc_parser *parser, void *arg);
+static int calc_max_delay(struct mmc_parser *parser, void *arg);
 mmc_req_cb cbs[] = {
 	{{NULL, NULL}, "classify request to different lists", classify_req, NULL},
-	{{NULL, NULL}, "calc write max busy time", calc_max_busy, NULL},
+	{{NULL, NULL}, "calc read/write max latency/busy time", calc_max_delay, NULL},
 
 };
 
@@ -69,6 +69,7 @@ static int classify_req(struct mmc_parser *parser, void *arg)
 
 	switch (cmd_index) {
 		case TYPE_18:
+			parser->stats.cmd18_list = g_slist_prepend(parser->stats.cmd18_list, parser->cur_req);
 		break;
 
 		case TYPE_25:
@@ -80,7 +81,7 @@ static int classify_req(struct mmc_parser *parser, void *arg)
 	return 0;
 }
 
-static int calc_max_busy(struct mmc_parser *parser, void *arg)
+static int calc_max_delay(struct mmc_parser *parser, void *arg)
 {
 	int index;
 
@@ -180,13 +181,18 @@ gint find_acs(gconstpointer item1, gconstpointer item2) {
 		return 0;
 }
 
-void *prep_data_w_busy(mmc_parser *parser, xls_config *config)
+void *prep_data_rw_dist(mmc_parser *parser, xls_config *config, int type)
 {
 	int max_delay_time = 0;
+	int req_counts = 0;
 	mmc_request *req;
-	//struct list_head *list = &parser->stats.cmd25_list;
-	GSList *cmd25_list = parser->stats.cmd25_list;
-	GSList *busy_list = NULL;
+	GSList *req_list = NULL;
+	if (type == 1)
+		req_list = parser->stats.cmd25_list;
+	else
+		req_list = parser->stats.cmd18_list;
+
+	GSList *dist_list = NULL;
 	GSList *item = NULL, *iterator = NULL;
 
 	/*
@@ -194,14 +200,14 @@ void *prep_data_w_busy(mmc_parser *parser, xls_config *config)
 	 * the x axis is [0~20), [20~40), ..., 180~200, [200~220)us
 	 * int nums = max_delay_time/steps+1;
 	 */
-	//list_for_each_entry(req, list, req_node) {
-	for (iterator = cmd25_list; iterator; iterator = iterator->next) {
 
+	for (iterator = req_list; iterator; iterator = iterator->next) {
+		req_counts++;
 		req = (mmc_request *)iterator->data;
 		int index = req->max_delay/config->x_steps;
 		
 		dbg(L_DEBUG, "index:%d\n", index);
-		item = g_slist_find_custom(busy_list, &index, (GCompareFunc)find_index);
+		item = g_slist_find_custom(dist_list, &index, (GCompareFunc)find_index);
 		if (item) {
 			dbg(L_DEBUG, "item exsit\n");
 			((xls_data_entry *)item->data)->val += 1;
@@ -209,13 +215,13 @@ void *prep_data_w_busy(mmc_parser *parser, xls_config *config)
 			dbg(L_DEBUG, "create new item\n");
 			xls_data_entry *entry = calloc(1, sizeof(xls_data_entry));
 			entry->idx = index;
-			char tmp[16];
+			char tmp[20];
 			snprintf(tmp, sizeof(tmp), "[%d~%d)", index*config->x_steps, (index+1)*config->x_steps);
 			entry->idx_desc = strdup(tmp);
 
 			entry->val = 1;
 
-			busy_list = g_slist_insert_sorted(busy_list, entry, (GCompareFunc)find_acs);
+			dist_list = g_slist_insert_sorted(dist_list, entry, (GCompareFunc)find_acs);
 
 		}
 		
@@ -223,15 +229,35 @@ void *prep_data_w_busy(mmc_parser *parser, xls_config *config)
 			max_delay_time = req->max_delay;
 	}
 
-	dbg(L_DEBUG, "max delay time: %dus\n", max_delay_time);
-	g_slist_foreach(busy_list, (GFunc)print_xls_entry, NULL);
+	dbg(L_DEBUG, "max delay time: %dus, all req counts:%d\n", max_delay_time, req_counts);
+	
+	//calc percentage
+	for (iterator = dist_list; iterator; iterator = iterator->next) {
+		xls_data_entry *entry = (xls_data_entry *)iterator->data;
+		double per = (double)entry->val/req_counts*100;
+		char tmp[10];
+		snprintf(tmp, sizeof(tmp), "%.2f%%", per);
+		entry->val_desc = strdup(tmp);
+	}
 
-	return busy_list;
+	g_slist_foreach(dist_list, (GFunc)print_xls_entry, NULL);
+
+	return dist_list;
 }
 
-int write_data_w_busy(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_config *config)
+void *prep_data_w_busy(mmc_parser *parser, xls_config *config)
 {
-	GSList *busy_list = data;
+	return prep_data_rw_dist(parser, config, 1);	//1->write, 0->read
+}
+
+void *prep_data_r_latency(mmc_parser *parser, xls_config *config)
+{
+	return prep_data_rw_dist(parser, config, 0);	//1->write, 0->read
+}
+
+int write_data_rw_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_config *config)
+{
+	GSList *dist_list = data;
 	GSList *iterator = NULL;
 	int row=0, col=0;
 
@@ -241,13 +267,15 @@ int write_data_w_busy(lxw_workbook *workbook, lxw_worksheet *worksheet, void *da
 	worksheet_write_string(worksheet, CELL("A1"), "ID", bold);
     worksheet_write_string(worksheet, CELL("B1"), config->chart_x_name, bold);
     worksheet_write_string(worksheet, CELL("C1"), config->chart_y_name, bold);
+    worksheet_write_string(worksheet, CELL("D1"), "Percentage", bold);
     row=1;
-    //g_slist_foreach(busy_list, (GFunc)write_row, NULL);
-	for (iterator = busy_list; iterator; iterator = iterator->next) {
+    //g_slist_foreach(dist_list, (GFunc)write_row, NULL);
+	for (iterator = dist_list; iterator; iterator = iterator->next) {
 		xls_data_entry *entry = (xls_data_entry *)iterator->data;
   		worksheet_write_number(worksheet, row, col++, entry->idx, NULL);
   		worksheet_write_string(worksheet, row, col++, entry->idx_desc, NULL);
   		worksheet_write_number(worksheet, row, col++, entry->val, NULL);
+  		worksheet_write_string(worksheet, row, col++, entry->val_desc, NULL);
   		row++;
   		col=0;
  	}
@@ -295,12 +323,14 @@ void destroy_xls_entry(gpointer data)
 	xls_data_entry *entry = data;
 	if (entry->idx_desc)
 		free(entry->idx_desc);
+	if (entry->val_desc)
+		free(entry->val_desc);
 }
 
-void release_data_w_busy(void *data)
+void release_data_rw_dist(void *data)
 {
-	GSList *busy_list = data;
-	g_slist_free_full(busy_list, (GDestroyNotify)destroy_xls_entry);
+	GSList *dist_list = data;
+	g_slist_free_full(dist_list, (GDestroyNotify)destroy_xls_entry);
 }
 
 mmc_xls_cb *alloc_xls_cb()
@@ -366,9 +396,9 @@ int mmc_xls_init(mmc_parser *parser)
 		//init
 		cb->desc = "Write Busy Dist";
 		cb->prep_data = prep_data_w_busy;
-		cb->write_data = write_data_w_busy;
+		cb->write_data = write_data_rw_dist;
 		cb->create_chart = create_chart;
-		cb->release_data = release_data_w_busy;
+		cb->release_data = release_data_rw_dist;
 
 		cb->config->filename = filename;
 		cb->config->x_steps = x_steps;
@@ -376,6 +406,36 @@ int mmc_xls_init(mmc_parser *parser)
 		cb->config->chart_title_name = "CMD25 Max Busy Distribution";
 		cb->config->serie_name = "Busy Dist";
 		cb->config->chart_x_name = "Busy Range/us";
+		cb->config->chart_y_name = "Request Counts";
+
+		mmc_register_xls_cb(parser, cb);
+    }
+
+    if (parser->has_data && g_key_file_has_group(gkf, "Read Latency Dist")) {
+    	char *filename = g_key_file_get_value(gkf, "Read Latency Dist", "file_name", &error);
+    	if (filename == NULL) {
+    		filename = "default_r_latency.xlsx";
+    	}
+    	int x_steps = g_key_file_get_integer(gkf, "Read Latency Dist", "x_steps", &error);
+    	if (x_steps == 0) {
+    		x_steps = 20;
+    	}
+
+		//alloc xls callback
+		mmc_xls_cb *cb = alloc_xls_cb();
+		//init
+		cb->desc = "Read Latency Dist";
+		cb->prep_data = prep_data_r_latency;
+		cb->write_data = write_data_rw_dist;
+		cb->create_chart = create_chart;
+		cb->release_data = release_data_rw_dist;
+
+		cb->config->filename = filename;
+		cb->config->x_steps = x_steps;
+		cb->config->chart_type = LXW_CHART_COLUMN;
+		cb->config->chart_title_name = "CMD18 Max Latency Distribution";
+		cb->config->serie_name = "Latency Dist";
+		cb->config->chart_x_name = "Latency Range/us";
 		cb->config->chart_y_name = "Request Counts";
 
 		mmc_register_xls_cb(parser, cb);

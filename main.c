@@ -90,7 +90,7 @@ static const char *cmd_help =
 	"options:\n"
 	"\t--debug: print debug messages\n"
 	"\t--quite: only print error messages\n"
-	"\t--line: only parse first n lines\n"
+	"\t--line: only parse first n lines, if not set, all lines will be parsed\n"
 	"Example:\n"
 	"\tPAlogparser --line=100 test.csv\n";
 
