@@ -14,6 +14,8 @@ Example:
 	There are some groups in the file, such as "Write Busy Dist", "Read Latency Dist". A group represents an excel file which shows the statistics info. 
 	The configurations under a group will affect excel generationg progress. "file_name" defines the output excel file name. "x_steps" defines execl chart's x axis value's step, unit is microsecond(us).
 		e.g. for Write Busy Distribution, if the x_step is 20us, then x axis will be like "[0~20), [20~40), ..., [180~200), ...", for each write request, we will calculate the max busy time and detemine which busy range it falls on.
+	If you want to caculate write busy distribution, the csv file must contain BUSY event, otherwise the excel will not generate.
+	If you want to caculate read latency distribution, the csv file must contain DATA event, otherwise the excel will not generate.
 
 3. Current support features:
 	a. generate "Write Busy Distribution" excel
