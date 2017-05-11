@@ -119,6 +119,7 @@ typedef struct xls_data_entry
 	int idx;
 	char *idx_desc;
 	int val;
+	double val_1;
 	char *val_desc;
 } xls_data_entry;
 
@@ -156,7 +157,7 @@ typedef struct mmc_xls_cb {
 
 void print_xls_entry(gpointer item, gpointer user_data) {
 	xls_data_entry *entry = item;
-	dbg(L_DEBUG, "[%d] (%s) %d\n", entry->idx, entry->idx_desc, entry->val);
+	dbg(L_DEBUG, "[%d] (%s) %d %f\n", entry->idx, entry->idx_desc, entry->val, entry->val_1);
 }
 
 gint find_index(gconstpointer item1, gconstpointer item2) {
@@ -181,6 +182,27 @@ gint find_acs(gconstpointer item1, gconstpointer item2) {
 		return 0;
 }
 
+/* for percentage compare */
+gint compare_per(gconstpointer item1, gconstpointer item2) {
+	xls_data_entry *entry = item1;
+	xls_data_entry *user = item2;
+
+	if (entry->val_1 > user->val_1)
+		return -1;
+	else if (entry->val_1 < user->val_1)
+		return 1;
+	else
+		return 0;
+}
+
+typedef struct rw_dist_data
+{
+	GSList *list;
+	GSList *per_list;	//per desc list
+	int req_counts;
+	int max_delay_time;
+} rw_dist_data;
+
 void *prep_data_rw_dist(mmc_parser *parser, xls_config *config, int type)
 {
 	int max_delay_time = 0;
@@ -192,7 +214,9 @@ void *prep_data_rw_dist(mmc_parser *parser, xls_config *config, int type)
 	else
 		req_list = parser->stats.cmd18_list;
 
+	rw_dist_data *result = calloc(1, sizeof(rw_dist_data));
 	GSList *dist_list = NULL;
+	GSList *per_list = NULL;
 	GSList *item = NULL, *iterator = NULL;
 
 	/*
@@ -219,7 +243,8 @@ void *prep_data_rw_dist(mmc_parser *parser, xls_config *config, int type)
 			snprintf(tmp, sizeof(tmp), "[%d~%d)", index*config->x_steps, (index+1)*config->x_steps);
 			entry->idx_desc = strdup(tmp);
 
-			entry->val = 1;
+			entry->val = 1;		//req counts
+			entry->val_1 = 0;	//percentage
 
 			dist_list = g_slist_insert_sorted(dist_list, entry, (GCompareFunc)find_acs);
 
@@ -235,14 +260,26 @@ void *prep_data_rw_dist(mmc_parser *parser, xls_config *config, int type)
 	for (iterator = dist_list; iterator; iterator = iterator->next) {
 		xls_data_entry *entry = (xls_data_entry *)iterator->data;
 		double per = (double)entry->val/req_counts*100;
-		char tmp[10];
-		snprintf(tmp, sizeof(tmp), "%.2f%%", per);
-		entry->val_desc = strdup(tmp);
+		//char tmp[10];
+		//memset(tmp, 0, sizeof(tmp));
+		//snprintf(tmp, sizeof(tmp), "%.2f", per);
+		//entry->val_desc = strdup(tmp);
+		//sscanf(tmp, "%f", &entry->val_1);
+		entry->val_1 = per;
 	}
+
+	per_list = g_slist_copy(dist_list);
+
+	per_list = g_slist_sort(per_list, (GCompareFunc)compare_per);
 
 	g_slist_foreach(dist_list, (GFunc)print_xls_entry, NULL);
 
-	return dist_list;
+	result->list = dist_list;
+	result->per_list = per_list;
+	result->req_counts = req_counts;
+	result->max_delay_time = max_delay_time;
+
+	return result;
 }
 
 void *prep_data_w_busy(mmc_parser *parser, xls_config *config)
@@ -257,17 +294,23 @@ void *prep_data_r_latency(mmc_parser *parser, xls_config *config)
 
 int write_data_rw_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_config *config)
 {
-	GSList *dist_list = data;
+	rw_dist_data *result = data;
+	GSList *dist_list = result->list;
+	GSList *per_list = result->per_list;
 	GSList *iterator = NULL;
 	int row=0, col=0;
 
 	lxw_format *bold = workbook_add_format(workbook);
     format_set_bold(bold);
 
+    lxw_format *format = workbook_add_format(workbook);
+	format_set_num_format(format, "0.00");
+
 	worksheet_write_string(worksheet, CELL("A1"), "ID", bold);
     worksheet_write_string(worksheet, CELL("B1"), config->chart_x_name, bold);
-    worksheet_write_string(worksheet, CELL("C1"), config->chart_y_name, bold);
-    worksheet_write_string(worksheet, CELL("D1"), "Percentage", bold);
+    worksheet_write_string(worksheet, CELL("C1"), "Request Counts", bold);
+    worksheet_write_string(worksheet, CELL("D1"), config->chart_y_name, bold);
+
     row=1;
     //g_slist_foreach(dist_list, (GFunc)write_row, NULL);
 	for (iterator = dist_list; iterator; iterator = iterator->next) {
@@ -275,7 +318,7 @@ int write_data_rw_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *d
   		worksheet_write_number(worksheet, row, col++, entry->idx, NULL);
   		worksheet_write_string(worksheet, row, col++, entry->idx_desc, NULL);
   		worksheet_write_number(worksheet, row, col++, entry->val, NULL);
-  		worksheet_write_string(worksheet, row, col++, entry->val_desc, NULL);
+  		worksheet_write_number(worksheet, row, col++, entry->val_1, format);
   		row++;
   		col=0;
  	}
@@ -286,9 +329,34 @@ int write_data_rw_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *d
  	config->x1_area.last_col = 1;
 
  	config->y1_area.first_row = 1;
- 	config->y1_area.first_col = 2;
+ 	config->y1_area.first_col = 3;
  	config->y1_area.last_row = row-1;
- 	config->y1_area.last_col = 2;
+ 	config->y1_area.last_col = 3;
+
+	//summary
+    worksheet_write_string(worksheet, CELL("F1"), "Total Requests", bold);
+    worksheet_write_number(worksheet, CELL("F2"), result->req_counts, NULL);
+    worksheet_write_string(worksheet, CELL("G1"), "Max Delay Time/us", bold);
+    worksheet_write_number(worksheet, CELL("G2"), result->max_delay_time, NULL);
+
+ 	worksheet_write_string(worksheet, CELL("H1"), "Top percentage", bold);
+ 	worksheet_write_string(worksheet, CELL("I1"), config->chart_x_name, bold);
+    worksheet_write_string(worksheet, CELL("J1"), config->chart_y_name, bold);
+ 	row=1;
+ 	int start_col = lxw_name_to_col("I");
+ 	col = start_col;
+	for (iterator = per_list; row<16 && iterator; iterator = iterator->next) {
+		xls_data_entry *entry = (xls_data_entry *)iterator->data;
+  		worksheet_write_string(worksheet, row, col++, entry->idx_desc, NULL);
+  		worksheet_write_number(worksheet, row, col++, entry->val_1, format);
+  		row++;
+  		col = start_col;
+ 	}
+
+ 	char tmp[16];
+	memset(tmp, 0, sizeof(tmp));
+	snprintf(tmp, sizeof(tmp), "=SUM(J2:J%d)", row);
+ 	worksheet_write_formula(worksheet, row, lxw_name_to_col("J"), tmp, NULL);
 
  	return 0;
 }
@@ -313,7 +381,7 @@ int create_chart(lxw_workbook *workbook, lxw_worksheet *worksheet, xls_config *c
 	                         		.y_scale  = 4,
 	                         	};
 
-    worksheet_insert_chart_opt(worksheet, CELL("F4"), chart, &options);
+    worksheet_insert_chart_opt(worksheet, CELL("F22"), chart, &options);
 
     return 0;
 }
@@ -329,8 +397,10 @@ void destroy_xls_entry(gpointer data)
 
 void release_data_rw_dist(void *data)
 {
-	GSList *dist_list = data;
+	rw_dist_data *result = data;
+	GSList *dist_list = result->list;
 	g_slist_free_full(dist_list, (GDestroyNotify)destroy_xls_entry);
+	g_slist_free(result->per_list);
 }
 
 mmc_xls_cb *alloc_xls_cb()
@@ -406,7 +476,7 @@ int mmc_xls_init(mmc_parser *parser)
 		cb->config->chart_title_name = "CMD25 Max Busy Distribution";
 		cb->config->serie_name = "Busy Dist";
 		cb->config->chart_x_name = "Busy Range/us";
-		cb->config->chart_y_name = "Request Counts";
+		cb->config->chart_y_name = "Percentage";
 
 		mmc_register_xls_cb(parser, cb);
     }
@@ -436,7 +506,7 @@ int mmc_xls_init(mmc_parser *parser)
 		cb->config->chart_title_name = "CMD18 Max Latency Distribution";
 		cb->config->serie_name = "Latency Dist";
 		cb->config->chart_x_name = "Latency Range/us";
-		cb->config->chart_y_name = "Request Counts";
+		cb->config->chart_y_name = "Percentage";
 
 		mmc_register_xls_cb(parser, cb);
     }
