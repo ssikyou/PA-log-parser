@@ -144,10 +144,13 @@ int main(int argc, char **argv)
 	mmc_parser *parser = mmc_parser_init(has_data, has_busy, "parser.conf");
 
 	//register request callback
-	mmc_cb_init(parser);
+	ret = mmc_cb_init(parser);
+	if (ret) {
+		goto parser_destroy;
+	}
 
 	//register xls callback
-	mmc_xls_init(parser);
+	mmc_xls_init(parser, argv[0]);
 
 #if 1
 	unsigned int cur_line = 1;
@@ -181,6 +184,7 @@ int main(int argc, char **argv)
 
     CsvParser_destroy(csvparser);
 
+parser_destroy:
 	mmc_parser_destroy(parser);
 #endif
 

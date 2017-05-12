@@ -151,9 +151,10 @@ typedef struct mmc_request {
 
 struct mmc_parser;
 typedef struct mmc_req_cb {
-	struct list_head cb_node;
 	char *desc;
+	int (* init)(struct mmc_parser *parser, void *arg);
 	int (* func)(struct mmc_parser *parser, void *arg);
+	int (* destroy)(struct mmc_parser *parser, void *arg);
 	void *arg;
 } mmc_req_cb;
 
@@ -194,7 +195,7 @@ typedef struct mmc_parser {
 
 	GKeyFile* gkf;		//read config file
 	mmc_stats stats;
-	struct list_head cb_list;
+	GSList *req_cb_list;
 	GSList *xls_list;
 } mmc_parser;
 
@@ -204,7 +205,7 @@ void mmc_parser_destroy(mmc_parser *parser);
 int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum);
 int mmc_cb_init(mmc_parser *parser);
 int mmc_register_req_cb(mmc_parser *parser, mmc_req_cb *cb);
-int mmc_xls_init(mmc_parser *parser);
+int mmc_xls_init(mmc_parser *parser, char *csvpath);
 int generate_xls(mmc_parser *parser);
 
 int parse_event_id(void *data, unsigned int *out);

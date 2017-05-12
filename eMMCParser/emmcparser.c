@@ -154,7 +154,7 @@ mmc_parser *mmc_parser_init(int has_data, int has_busy, char *config_file)
 	parser->stats.cmd25_list = NULL;
 	parser->stats.cmd18_list = NULL;
 
-	INIT_LIST_HEAD(&parser->cb_list);
+	parser->req_cb_list = NULL;
 	parser->xls_list = NULL;
 
 	parser->has_data = has_data;
@@ -189,7 +189,10 @@ void mmc_parser_destroy(mmc_parser *parser)
 		mmc_destroy_xls_list(parser->xls_list);
 
 	if (parser->gkf)
-		g_key_file_free (parser->gkf);
+		g_key_file_free(parser->gkf);
+
+	if (parser->req_cb_list)
+		mmc_destroy_req_cb_list(parser, parser->req_cb_list);
 
 	free(parser->data);
 	free(parser);
@@ -247,9 +250,10 @@ static void end_request(mmc_parser *parser)
 {
 	dbg(L_DEBUG, "\n====end of current request!====\n");
 	mmc_req_cb *cb;
-	//if (parser->cur_req->cmd->cmd_index==TYPE_18)
-		//list_add_tail(&parser->cur_req->req_node, &parser->stats.cmd18_list);
-	list_for_each_entry(cb, &parser->cb_list, cb_node) {
+	GSList *iterator;
+	//list_for_each_entry(cb, &parser->cb_list, cb_node) {
+	for (iterator = parser->req_cb_list; iterator; iterator = iterator->next) {
+		cb = (mmc_req_cb *)iterator->data;
 		dbg(L_DEBUG, "doing callback: %s\n", cb->desc);
 		cb->func(parser, cb->arg);
 	}

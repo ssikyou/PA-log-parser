@@ -20,12 +20,15 @@
 static int classify_req(struct mmc_parser *parser, void *arg);
 static int calc_max_delay(struct mmc_parser *parser, void *arg);
 mmc_req_cb cbs[] = {
-	{{NULL, NULL}, "classify request to different lists", classify_req, NULL},
-	{{NULL, NULL}, "calc read/write max latency/busy time", calc_max_delay, NULL},
+	{"classify request to different lists", NULL, classify_req, NULL, NULL},
+	{"calc read/write max latency/busy time", NULL, calc_max_delay, NULL, NULL},
 
 };
 
-static mmc_req_cb *alloc_req_cb(char *desc, int (* func)(struct mmc_parser *parser, void *arg), void *arg)
+mmc_req_cb *alloc_req_cb(char *desc, int (* init)(struct mmc_parser *parser, void *arg), 
+											int (* func)(struct mmc_parser *parser, void *arg),
+											int (* destroy)(struct mmc_parser *parser, void *arg),
+											void *arg)
 {
 	mmc_req_cb *cb = calloc(1, sizeof(mmc_req_cb));
 	if (cb == NULL) {
@@ -33,10 +36,12 @@ static mmc_req_cb *alloc_req_cb(char *desc, int (* func)(struct mmc_parser *pars
 		goto fail;
 	}
 
-	INIT_LIST_HEAD(&cb->cb_node);
+	//INIT_LIST_HEAD(&cb->cb_node);
 
 	cb->desc = desc;
+	cb->init = init;
 	cb->func = func;
+	cb->destroy = destroy;
 	cb->arg = arg;
 
 	return cb;
@@ -96,17 +101,59 @@ static int calc_max_delay(struct mmc_parser *parser, void *arg)
 
 int mmc_register_req_cb(mmc_parser *parser, mmc_req_cb *cb)
 {
-	list_add_tail(&cb->cb_node, &parser->cb_list);
+	int ret = 0;
+	if (cb->init) {
+		ret = cb->init(parser, cb->arg);
+
+		if (ret!=0) {
+			error("mmc req callback init failed!\n");
+			return ret;
+		}
+	}
+
+	parser->req_cb_list = g_slist_append(parser->req_cb_list, cb);
+	//list_add_tail(&cb->cb_node, &parser->cb_list);
 	return 0;
+}
+
+void destroy_req_cb(mmc_parser *parser, gpointer data)
+{
+	mmc_req_cb *cb = data;
+	if (cb != NULL) {
+		if (cb->destroy)
+			cb->destroy(parser, cb->arg);
+		free(cb);
+	}
+}
+
+void mmc_destroy_req_cb_list(mmc_parser *parser, GSList *list)
+{
+	//g_slist_free_full(list, (GDestroyNotify)destroy_req_cb);
+	mmc_req_cb *cb;
+	GSList *iterator;
+
+	for (iterator = parser->req_cb_list; iterator; iterator = iterator->next) {
+		cb = (mmc_req_cb *)iterator->data;
+		if (cb->destroy)
+			cb->destroy(parser, cb->arg);
+		iterator = g_slist_remove(iterator, cb);
+		//free(cb);
+	}
+	parser->req_cb_list = NULL;
 }
 
 int mmc_cb_init(mmc_parser *parser)
 {
+	int ret = 0;
 	int i;
 
 	for (i = 0; i < NELEMS(cbs); i++) {
-		INIT_LIST_HEAD(&cbs[i].cb_node);
-		mmc_register_req_cb(parser, &cbs[i]);
+		//INIT_LIST_HEAD(&cbs[i].cb_node);
+		ret = mmc_register_req_cb(parser, &cbs[i]);
+
+		if (ret) {
+			return ret;
+		}
 	}
 
 	return 0;
@@ -430,9 +477,13 @@ fail:
 void destroy_xls_cb(gpointer data)
 {
 	mmc_xls_cb *cb = data;
-	if (cb->config)
-		free(cb->config);
-	free(cb);
+	if (cb) {
+		if (cb->config) {
+			free(cb->config->filename);
+			free(cb->config);
+		}
+		free(cb);
+	}
 }
 
 int mmc_register_xls_cb(mmc_parser *parser, mmc_xls_cb *cb)
@@ -446,20 +497,30 @@ void mmc_destroy_xls_list(GSList *list)
 	g_slist_free_full(list, (GDestroyNotify)destroy_xls_cb);
 }
 
-int mmc_xls_init(mmc_parser *parser)
+int mmc_xls_init(mmc_parser *parser, char *csvpath)
 {
 	GKeyFile* gkf = parser->gkf;
 	GError *error;
 
 	if (parser->has_busy && g_key_file_has_group(gkf, "Write Busy Dist")) {
-    	char *filename = g_key_file_get_value(gkf, "Write Busy Dist", "file_name", &error);
-    	if (filename == NULL) {
-    		filename = "default_w_busy.xlsx";
+    	char *file_name_suffix = g_key_file_get_value(gkf, "Write Busy Dist", "file_name_suffix", &error);
+    	if (file_name_suffix == NULL) {
+    		file_name_suffix = "_w_busy";
     	}
     	int x_steps = g_key_file_get_integer(gkf, "Write Busy Dist", "x_steps", &error);
     	if (x_steps == 0) {
     		x_steps = 20;
     	}
+
+    	char filename[256];
+		memset(filename, 0, sizeof(filename));
+		char **tokens = g_strsplit_set(csvpath, "/.", -1);
+		int nums = g_strv_length(tokens);
+		strcat(filename, tokens[nums-2]);
+		strcat(filename, file_name_suffix);
+		strcat(filename, ".xlsx");
+		g_strfreev(tokens);
+	    dbg(L_DEBUG, "filename:%s nums:%d\n", filename, nums);
 
 		//alloc xls callback
 		mmc_xls_cb *cb = alloc_xls_cb();
@@ -470,7 +531,7 @@ int mmc_xls_init(mmc_parser *parser)
 		cb->create_chart = create_chart;
 		cb->release_data = release_data_rw_dist;
 
-		cb->config->filename = filename;
+		cb->config->filename = strdup(filename);
 		cb->config->x_steps = x_steps;
 		cb->config->chart_type = LXW_CHART_COLUMN;
 		cb->config->chart_title_name = "CMD25 Max Busy Distribution";
@@ -482,14 +543,24 @@ int mmc_xls_init(mmc_parser *parser)
     }
 
     if (parser->has_data && g_key_file_has_group(gkf, "Read Latency Dist")) {
-    	char *filename = g_key_file_get_value(gkf, "Read Latency Dist", "file_name", &error);
-    	if (filename == NULL) {
-    		filename = "default_r_latency.xlsx";
+    	char *file_name_suffix = g_key_file_get_value(gkf, "Read Latency Dist", "file_name_suffix", &error);
+    	if (file_name_suffix == NULL) {
+    		file_name_suffix = "_r_latency";
     	}
     	int x_steps = g_key_file_get_integer(gkf, "Read Latency Dist", "x_steps", &error);
     	if (x_steps == 0) {
     		x_steps = 20;
     	}
+
+    	char filename[256];
+		memset(filename, 0, sizeof(filename));
+		char **tokens = g_strsplit_set(csvpath, "/.", -1);
+		int nums = g_strv_length(tokens);
+		strcat(filename, tokens[nums-2]);
+		strcat(filename, file_name_suffix);
+		strcat(filename, ".xlsx");
+		g_strfreev(tokens);
+	    dbg(L_DEBUG, "filename:%s nums:%d\n", filename, nums);
 
 		//alloc xls callback
 		mmc_xls_cb *cb = alloc_xls_cb();
@@ -500,7 +571,7 @@ int mmc_xls_init(mmc_parser *parser)
 		cb->create_chart = create_chart;
 		cb->release_data = release_data_rw_dist;
 
-		cb->config->filename = filename;
+		cb->config->filename = strdup(filename);
 		cb->config->x_steps = x_steps;
 		cb->config->chart_type = LXW_CHART_COLUMN;
 		cb->config->chart_title_name = "CMD18 Max Latency Distribution";
