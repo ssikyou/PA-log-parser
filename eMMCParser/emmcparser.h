@@ -203,6 +203,10 @@ typedef struct mmc_parser {
 mmc_parser *mmc_parser_init(int parse_data, int parse_busy, char *config_file);
 void mmc_parser_destroy(mmc_parser *parser);
 int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum);
+mmc_req_cb *alloc_req_cb(char *desc, int (* init)(struct mmc_parser *parser, void *arg),
+											int (* func)(struct mmc_parser *parser, void *arg),
+											int (* destroy)(struct mmc_parser *parser, void *arg),
+											void *arg);
 int mmc_cb_init(mmc_parser *parser);
 int mmc_register_req_cb(mmc_parser *parser, mmc_req_cb *cb);
 int mmc_xls_init(mmc_parser *parser, char *csvpath);
