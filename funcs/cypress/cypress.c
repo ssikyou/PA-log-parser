@@ -25,6 +25,7 @@ typedef struct cypress_cfg{
 typedef struct cypress{
     config_info *cfg;
     int start_value;
+	int exec_cmd1;
     file_info   file;
 }cypress;
 
@@ -129,6 +130,8 @@ static void handle_cmd6(mmc_cmd *cmd, cypress *press)
     cypress_cfg *cy_cfg = (cypress_cfg *)cfg->priv;
 	unsigned int arg = cmd->arg;
     unsigned char index, value;
+	char buf[255];
+	int len = 0;
 
     index = (arg>>16)&0xff;
     value = (arg>>8)&0xff;
@@ -151,10 +154,14 @@ static void handle_cmd6(mmc_cmd *cmd, cypress *press)
                 case 5://4bit ddr
                     cy_cfg->host_io = HOST_IO_4BIT;
                     cy_cfg->data_rate = DATA_RATE_DDR;
+					break;
                 case 6://8bit ddr
                     cy_cfg->host_io = HOST_IO_8BIT;
                     cy_cfg->data_rate = DATA_RATE_DDR;
+					break;
             }
+			len += sprintf(buf + len,"SetHost,CLK=%d,IO=%d\n", cy_cfg->host_clk, cy_cfg->host_io);
+			update_shell_file(&press->file, buf, len);
             break;
    }
 }
@@ -168,16 +175,26 @@ static int handle_request(mmc_request *req, cypress *press)
     config_info *cfg = press->cfg;
     cypress_cfg *cy_cfg = (cypress_cfg *)cfg->priv;
 
+	if((press->exec_cmd1 == 2)&&(cmd->cmd_index == 1))
+		return 0;//only two cmd1
+
+	format_cmd(cmd, press);
+
     switch(cmd->cmd_index){
         case 0:
+            cy_cfg->host_io = HOST_IO_1BIT;
+            cy_cfg->data_rate = DATA_RATE_SDR;
+			len += sprintf(buf + len,"SetHost,CLK=400,IO=%d\n", cy_cfg->host_io);
             break;
         case 1:
+			press->exec_cmd1++;
             len += sprintf(buf + len,"sleep,time=500\n");
             break;
         case 16:
             cfg->block_size = cmd->arg;
             break;
         case 2:
+			press->exec_cmd1 = 0;
         case 3:
         case 7:
         case 9:
@@ -220,7 +237,7 @@ static int handle_request(mmc_request *req, cypress *press)
     }
     update_shell_file(&press->file, buf, len);
 
-    return len;
+    return 0;
 }
 
 static config_list list[]={
@@ -301,7 +318,8 @@ int cypress_init(func* func, func_param *param)
         free(press);
         return ret;
     }
-//    press->start_value = param->start_value;
+
+	press->exec_cmd1 = 0;
     func->priv = (void*)press;
     return ret;
 }
@@ -315,7 +333,6 @@ int cypress_request(func *func, mmc_request *req)
     }
 
     if(req->cmd){
-        format_cmd(req->cmd, press);
         handle_request(req, press);
     }
 
