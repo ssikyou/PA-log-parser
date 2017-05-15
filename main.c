@@ -18,6 +18,9 @@
 #include "xlsxwriter.h"
 #include "glib.h"
 
+#include "func.h"
+#include "func_ops.h"
+
 //int g_debug_level = L_DEBUG;
 int g_debug_level = L_INFO;
 
@@ -145,6 +148,11 @@ int main(int argc, char **argv)
 
 	//register request callback
 	ret = mmc_cb_init(parser);
+	if (ret) {
+		goto parser_destroy;
+	}
+
+	ret = register_func(parser, FUNC_CYPRESS, argv[0]);
 	if (ret) {
 		goto parser_destroy;
 	}

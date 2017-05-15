@@ -1,6 +1,6 @@
 CC ?= gcc
 AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_FORTIFY_SOURCE=2
-INCLUDE = -I. -I ./include -I ./CsvParser/include -I ./eMMCParser -I ./libxlsxwriter/include -I ./glib/include/glib-2.0 -I ./glib/lib/glib-2.0/include
+INCLUDE = -I. -I ./include -I ./CsvParser/include -I ./eMMCParser -I ./libxlsxwriter/include -I ./glib/include/glib-2.0 -I ./glib/lib/glib-2.0/include -I./funcs
 CFLAGS ?= $(INCLUDE) -g #-static -O2 -pie -fPIE
 LDFLAGS ?= -L ./libxlsxwriter/lib -L ./glib/lib #-static -pie -fPIE
 LIBS = -lxlsxwriter -lz -lglib-2.0 -pthread
@@ -17,7 +17,11 @@ objects = \
 	CsvParser/src/csvparser.o \
 	eMMCParser/emmcparser.o \
 	eMMCParser/emmcfunc.o \
-	eMMCParser/emmccb.o
+	eMMCParser/emmccb.o \
+	funcs/func.o \
+	funcs/config.o \
+	funcs/cypress/file.o \
+	funcs/cypress/cypress.o
 
 progs = PAlogparser
 depend_libs =
