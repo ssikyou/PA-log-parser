@@ -132,13 +132,17 @@ void mmc_destroy_req_cb_list(mmc_parser *parser, GSList *list)
 	mmc_req_cb *cb;
 	GSList *iterator;
 
-	for (iterator = parser->req_cb_list; iterator; iterator = iterator->next) {
+	for (iterator = parser->req_cb_list; iterator &&(iterator->next != iterator) ; iterator = iterator->next) {
 		cb = (mmc_req_cb *)iterator->data;
+            if(cb->desc)
+                printf("%s %s\n",__func__, cb->desc);
 		if (cb->destroy)
 			cb->destroy(parser, cb->arg);
-		iterator = g_slist_remove(iterator, cb);
+		//iterator = g_slist_remove(iterator, cb);
 		//free(cb);
 	}
+	g_slist_free(parser->req_cb_list);
+
 	parser->req_cb_list = NULL;
 }
 
