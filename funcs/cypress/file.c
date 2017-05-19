@@ -182,17 +182,18 @@ int create_intinc_file(const char *name,unsigned int *val,unsigned short blocks)
 {
     int fd;
     unsigned long  size = blocks*512;
+
     fd = open(name, O_CREAT | O_RDWR |O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
     if (fd < 0) {
         printf("%s:ERR file create fail:%d\n", __func__, fd);
 		return -1;
 	}
 
-    do{
+    while(size > 0){
         write(fd, val, sizeof(val));
         *val = *val + 1;
         size -=sizeof(val);
-    }while(size > 0);
+    };
 
     close(fd);
 
@@ -210,11 +211,11 @@ int create_intdec_file(const char *name,unsigned int *val,unsigned short blocks)
 		return -1;
 	}
 
-    do{
+    while(size > 0){
         write(fd, val, sizeof(val));
         *val = *val - 1;
         size -=sizeof(val);
-    }while(size > 0);
+    };
 
     close(fd);
 
@@ -233,10 +234,10 @@ int create_random_file(const char *name, unsigned short blocks)
 		return -1;
 	}
 
-    do{
+    while(size > 0){
         write(fd, &rnd, sizeof(rnd));
         size -=sizeof(rnd);
-    }while(size > 0);
+    };
 
     close(fd);
 
@@ -259,14 +260,14 @@ int create_pattern_file(const char *name,const unsigned char *pattern, int patte
 		return -1;
 	}
 
-    do{
+    while(size > 0){
         if(pattern_size < size)
             len = pattern_size;
         else
             len = size;
         write(fd, pattern, len);
         size -= len;
-    }while(size > 0);
+    };
 
     close(fd);
 
@@ -297,14 +298,14 @@ int create_logdata_file(const char *name, const unsigned char *data, unsigned in
     for(i = 0; i < blocks; i++){
         pattern = data + i * pattern_size;
         size = 512;
-        do{
+        while(size > 0){
             if(pattern_size < size)
                 len = pattern_size;
             else
                 len = size;
             write(fd,pattern,len);
             size -= len;
-        }while(size > 0);
+        };
     }
     close(fd);
 
