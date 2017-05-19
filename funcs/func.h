@@ -15,7 +15,9 @@ typedef struct func_param{
     int has_data;
     int has_busy;
     //func_type type;
-    config_info *cfg;//this is the config for specify module
+	unsigned short max_sectors;
+	void *cfg;
+    //config_info *cfg;//this is the config for specify module
     const char *log_path;
 }func_param;
 

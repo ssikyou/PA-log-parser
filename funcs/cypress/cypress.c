@@ -6,44 +6,23 @@
 
 #include "common.h"
 #include "func.h"
-#include "config.h"
+#include "cypress_cfg.h"
 #include "file.h"
 
-#define HOST_IO_1BIT    1
-#define HOST_IO_4BIT    4
-#define HOST_IO_8BIT    8
-
-#define DATA_RATE_SDR   0
-#define DATA_RATE_DDR   1
-
-typedef struct cypress_cfg{
-    unsigned char host_io;//1,4,8
-    unsigned char data_rate;//0 sdr,1 ddr
-    unsigned int host_clk;//unit KHz
-	int max_sectors;
-}cypress_cfg;
-
 typedef struct cypress{
-    config_info *cfg;
+    cypress_cfg *cfg;
     int start_value;
 	int exec_cmd1;
     file_info   file;
 }cypress;
 
 
-static const char data_rate_table[][10] = {"SDR","DDR"};
-const char *data_rate_str(unsigned char data_rate)
-{
-    assert((data_rate == DATA_RATE_SDR) || (data_rate == DATA_RATE_DDR));
-    return data_rate_table[data_rate];
-}
-
 static char* get_write_file_path(mmc_request *req, cypress *press, char *path)
 {
     void *data = req->data;
     unsigned short block_count = req->sectors;
     file_info *file = &press->file;
-    config_info *cfg = press->cfg;
+    cypress_cfg *cfg = press->cfg;
 
     sprintf(path,"%s/%d.bin",file->write_path, file->wid++);
     dbg(L_INFO, "%s:path:%s\n",__func__, path);
@@ -128,8 +107,7 @@ static int format_cmd(mmc_cmd *cmd, cypress *press)
 
 static void handle_cmd6(mmc_cmd *cmd, cypress *press)
 {
-    config_info *cfg = press->cfg;
-    cypress_cfg *cy_cfg = (cypress_cfg *)cfg->priv;
+    cypress_cfg *cfg = press->cfg;
 	unsigned int arg = cmd->arg;
     unsigned char index, value;
 	char buf[255];
@@ -142,27 +120,27 @@ static void handle_cmd6(mmc_cmd *cmd, cypress *press)
         case 183://b7 bus width,
             switch(value){
                 case 0://1bit data bus
-                    cy_cfg->host_io = HOST_IO_1BIT;
-                    cy_cfg->data_rate = DATA_RATE_SDR;
+                    cfg->host_io = HOST_IO_1BIT;
+                    cfg->data_rate = DATA_RATE_SDR;
                     break;
                 case 1://4bit data bus
-                    cy_cfg->host_io = HOST_IO_4BIT;
-                    cy_cfg->data_rate = DATA_RATE_SDR;
+                    cfg->host_io = HOST_IO_4BIT;
+                    cfg->data_rate = DATA_RATE_SDR;
                     break;
                 case 2://8bit data bus
-                    cy_cfg->host_io = HOST_IO_8BIT;
-                    cy_cfg->data_rate = DATA_RATE_SDR;
+                    cfg->host_io = HOST_IO_8BIT;
+                    cfg->data_rate = DATA_RATE_SDR;
                     break;
                 case 5://4bit ddr
-                    cy_cfg->host_io = HOST_IO_4BIT;
-                    cy_cfg->data_rate = DATA_RATE_DDR;
+                    cfg->host_io = HOST_IO_4BIT;
+                    cfg->data_rate = DATA_RATE_DDR;
 					break;
                 case 6://8bit ddr
-                    cy_cfg->host_io = HOST_IO_8BIT;
-                    cy_cfg->data_rate = DATA_RATE_DDR;
+                    cfg->host_io = HOST_IO_8BIT;
+                    cfg->data_rate = DATA_RATE_DDR;
 					break;
             }
-			len += sprintf(buf + len,"SetHost,CLK=%d,IO=%d\n", cy_cfg->host_clk, cy_cfg->host_io);
+			len += sprintf(buf + len,"SetHost,CLK=%d,IO=%d\n", cfg->host_clk, cfg->host_io);
 			update_shell_file(&press->file, buf, len);
             break;
    }
@@ -174,9 +152,7 @@ static int handle_request(mmc_request *req, cypress *press)
     int block_count = req->sectors;
     char buf[255],path[255];
     mmc_cmd *cmd = req->cmd;
-    config_info *cfg = press->cfg;
-    cypress_cfg *cy_cfg = (cypress_cfg *)cfg->priv;
-
+    cypress_cfg *cfg = press->cfg;
 
 	if((press->exec_cmd1 == 2)&&(cmd->cmd_index == 1))
 		return 0;//only two cmd1
@@ -189,9 +165,9 @@ static int handle_request(mmc_request *req, cypress *press)
 
     switch(cmd->cmd_index){
         case 0:
-            cy_cfg->host_io = HOST_IO_1BIT;
-            cy_cfg->data_rate = DATA_RATE_SDR;
-			len += sprintf(buf + len,"SetHost,CLK=400,IO=%d\n", cy_cfg->host_io);
+            cfg->host_io = HOST_IO_1BIT;
+            cfg->data_rate = DATA_RATE_SDR;
+			len += sprintf(buf + len,"SetHost,CLK=400,IO=%d\n", cfg->host_io);
             break;
         case 1:
             len += sprintf(buf + len,"sleep,time=500\n");
@@ -227,7 +203,7 @@ static int handle_request(mmc_request *req, cypress *press)
         case 18:
         case 21:
             len += sprintf(buf + len,"DataR,IO=%d,DataRate=%s,BlockSize=%d,BlockNum=%d,SourceF=%s\n",
-				 cy_cfg->host_io, data_rate_str(cy_cfg->data_rate),
+				 cfg->host_io, data_rate_str(cfg->data_rate),
 				 cfg->block_size, block_count, get_read_file_path(req, press, path));
             break;
 		case 49:
@@ -237,7 +213,7 @@ static int handle_request(mmc_request *req, cypress *press)
         case 26:
         case 27:
             len += sprintf(buf + len,"DataW,IO=%d,DataRate=%s,BlockSize=%d,BlockNum=%d,SourceF=%s\n",
-				 cy_cfg->host_io, data_rate_str(cy_cfg->data_rate),
+				 cfg->host_io, data_rate_str(cfg->data_rate),
 				 cfg->block_size, block_count, get_write_file_path(req, press, path));
             len += sprintf(buf + len,"DataWaitReady\n");
             break;
@@ -250,97 +226,9 @@ static int handle_request(mmc_request *req, cypress *press)
     return 0;
 }
 
-static config_list list[]={
-    {.type = CFG_INT, .key = "host_io"},
-    {.type = CFG_INT, .key = "data_rate"},
-    {.type = CFG_INT, .key = "host_clk"},
-	{.type = CFG_INT, .key = "max_sectors"},
-};
-
-static int cypress_load_configs(mmc_parser *parser, func_param *param)
-{
-    int ret = 0;
-    config_info *cfg;
-    cypress_cfg *cy_cfg;
-
-    cfg = config_load(parser, &ret);
-    if(cfg == NULL || ret){
-        return -1;
-    }
-
-    cy_cfg = malloc(sizeof(cypress_cfg));
-    ret = config_load_list(parser, "Script Cypress", list, sizeof(list)/sizeof(list[0]));
-    if(ret){
-        return -1;
-    }
-    cy_cfg->host_io = list[0].val_int;
-    cy_cfg->data_rate = list[1].val_int;
-    cy_cfg->host_clk = list[2].val_int;
-	cy_cfg->max_sectors = list[3].val_int;
-    cfg->priv = cy_cfg;
-    param->cfg = cfg;
-    return 0;
-
-}
-
-static int cypress_config_init(cypress *press, func_param *param)
-{
-    config_info *cfg = param->cfg;
-    cypress_cfg *cy_cfg = (cypress_cfg *)cfg->priv;
-    int ret;
-
-    if((cy_cfg->host_io != HOST_IO_1BIT) &&
-			(cy_cfg->host_io != HOST_IO_4BIT) &&
-			(cy_cfg->host_io != HOST_IO_8BIT)){
-        error("ERR: %s invalid host_io:%d\n", __func__, cy_cfg->host_io);
-        return -1;
-    }
-
-    if((cy_cfg->data_rate != DATA_RATE_SDR) &&
-			(cy_cfg->data_rate != DATA_RATE_DDR)){
-        error("ERR: %s invalid data_rate:%d\n", __func__, cy_cfg->data_rate);
-        return -1;
-    }
-
-    if((cy_cfg->host_clk >50000)||(cy_cfg->host_clk < 400)){
-        error("ERR: %s host_clk(%d) out of range for cypress\n", __func__, cy_cfg->host_clk);
-        return -1;
-    }
-
-    ret = config_init(param->cfg, param->has_data);
-    if(ret){
-        return -1;
-    }
-
-    press->cfg = cfg;
-    return 0;
-}
-
-int cypress_init(func* func, func_param *param)
-{
-    int ret = 0;
-    cypress *press = malloc(sizeof(cypress));
-   
-    ret = cypress_config_init(press, param);
-    if(ret){
-        free(press);
-        return ret;
-    }
-
-    ret = file_init(&press->file, func->desc, pattern_type_str(param->cfg->pattern_type), param->log_path, 1);
-    if(ret){
-        free(press);
-        return ret;
-    }
-
-	press->exec_cmd1 = 0;
-    func->priv = (void*)press;
-    return ret;
-}
-
 static int handle_large_request(cypress *press, mmc_request *req)
 {
-	config_info *cfg = press->cfg;
+	cypress_cfg *cfg = press->cfg;
 
 	mmc_cmd *cmd = req->cmd;
     char buf[255], path[255];
@@ -366,13 +254,37 @@ static int handle_large_request(cypress *press, mmc_request *req)
 	return 0;
 }
 
+int cypress_init(func* func, func_param *param)
+{
+    int ret = 0;
+    cypress *press = malloc(sizeof(cypress));
+	press->cfg = (cypress_cfg *)param->cfg;
+
+    ret = cypress_config_init(press->cfg, param->has_data);
+    if(ret){
+        free(press);
+        return ret;
+    }
+
+    ret = file_init(&press->file, func->desc, pattern_type_str(press->cfg->pattern_type), param->log_path, 1);
+    if(ret){
+        free(press);
+        return ret;
+    }
+
+	press->exec_cmd1 = 0;
+    func->priv = (void*)press;
+    return ret;
+}
+
+
+
 int cypress_request(func *func, mmc_request *req)
 {
     cypress *press = (cypress *)func->priv;
-	config_info *cfg = press->cfg;
-	cypress_cfg *cy_cfg = (cypress_cfg *)cfg->priv;
+	cypress_cfg *cfg = press->cfg;
 
-	if((cfg->max_sectors > 0) && (req->sectors > cy_cfg->max_sectors)){
+	if((cfg->self_div) && (req->sectors > cfg->max_sectors)){
 		handle_large_request(press, req);
 		return 0;
 	}
@@ -395,7 +307,7 @@ int cypress_destory(func *func)
     cypress *press = (cypress *)func->priv;
 
     file_deinit(&press->file);
-    config_deinit(press->cfg);
+    cypress_config_deinit(press->cfg);
     return 0;
 }
 

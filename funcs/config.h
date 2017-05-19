@@ -33,22 +33,5 @@ typedef struct config_list{
     };
 }config_list;
 
-
-typedef struct config_info{
-    unsigned char pattern_type;// 0 random data, 1 user pattern, 2 int increase, 3 int decrease ,4 from log data
-    unsigned char *pattern_data;//save user data pattern
-    int pattern_len;//user pattern data len
-    unsigned int start_value;//for pattern increase or decrease, save user set int value.
-    int block_size;
-	int max_sectors;// >0 use max_sectors
-    void *priv;
-}config_info;
-
-const char *pattern_type_str(unsigned char pattern_type);
-
 int config_load_list(mmc_parser *parser, char *group, config_list *list, int list_len);
-config_info *config_load(mmc_parser *parser, int *ret);
-int config_init(config_info *cfg, int has_data);
-int config_deinit(config_info *cfg);
-
 #endif
