@@ -14,17 +14,19 @@
 #define L_INFO  2
 #define L_DEBUG 3
 extern int g_debug_level;
+extern FILE *g_log_file;
 
 #define DEBUG
 #ifdef DEBUG
 	#define dbg(level, ...) \
-		do { if (level<=g_debug_level) fprintf(stderr, __VA_ARGS__); } while (0)
+		do { if (level<=g_debug_level && g_log_file) fprintf(g_log_file, __VA_ARGS__); } while (0)
 #else
 	#define dbg(level, ...)
 #endif
 
 #define error(...) \
-	do { fprintf(stderr, __VA_ARGS__); } while (0)
+	do { fprintf(stderr, __VA_ARGS__); \
+		if (g_log_file) fprintf(g_log_file, __VA_ARGS__); } while (0)
 
 #ifndef offsetof
 #define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)

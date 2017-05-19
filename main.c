@@ -23,6 +23,7 @@
 
 //int g_debug_level = L_DEBUG;
 int g_debug_level = L_INFO;
+FILE *g_log_file = NULL;
 
 int exec_shell(char *str)
 {
@@ -135,6 +136,12 @@ int main(int argc, char **argv)
 	if(helper_arg(1, 1, &argc, &argv, cmd_help) != 0)
 		return -1;
 
+	g_log_file = fopen("log.txt", "w+");
+    if (g_log_file < 0) {
+    	perror("open log.txt failed");
+    	exit(EXIT_FAILURE);
+    }
+
 	dbg(L_DEBUG, "parse start!!!\n");
 
 	search_csv(argv[0], &has_data, &has_busy);
@@ -197,6 +204,10 @@ parser_destroy:
 #endif
 
 	dbg(L_DEBUG, "parse end!!!\n");
+
+	if (g_log_file)
+		fclose(g_log_file);
+
 	return ret;
 }
 

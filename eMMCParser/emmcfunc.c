@@ -26,6 +26,7 @@ int parse_resp_r2(void *data, unsigned int *out);
 event_parse_template events[] = {
 	{TYPE_0, " CMD00(GO_PRE_IDLE_STATE)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_0, " CMD00(GO_IDLE_STATE)", parse_cmd_args, NULL, NULL, NULL},
+	{TYPE_0, " CMD00(BOOT_INITIATION)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_1, " CMD01(SEND_OP_COND)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_2, " CMD02(ALL_SEND_CID)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_3, " CMD03(SET_RELATIVE_ADDR)", parse_cmd_args, NULL, NULL, NULL},
@@ -338,13 +339,13 @@ void dump_req(mmc_request *req)
 {
 	int i;
 	dbg(L_DEBUG, "request total time:%dus\n", req->total_time);
-	if (is_wr_cmd(req->cmd->cmd_index) || is_rd_cmd(req->cmd->cmd_index)) {
+	if (req->cmd && (is_wr_cmd(req->cmd->cmd_index) || is_rd_cmd(req->cmd->cmd_index))) {
 
 		if (req->sbc)
 			dump_cmd(req->sbc);
 
-		assert(req->cmd!=NULL); 
-		dump_cmd(req->cmd);
+		if (req->cmd)
+			dump_cmd(req->cmd);
 
 		if (req->stop)
 			dump_cmd(req->stop);
@@ -366,14 +367,16 @@ void dump_req(mmc_request *req)
 		dbg(L_DEBUG, "\n");
 		#endif
 	} else {
+		if (req->sbc)
+			dump_cmd(req->sbc);
 
-		assert(req->cmd!=NULL);
-		dump_cmd(req->cmd);
+		if (req->cmd)
+			dump_cmd(req->cmd);
 
 		if (req->stop)
 			dump_cmd(req->stop);
 
-		if (req->cmd->cmd_index == TYPE_6) {
+		if (req->cmd && req->cmd->cmd_index == TYPE_6) {
 			dbg(L_DEBUG, "\tbusy: %d\n", (int)(req->delay));
 		}
 

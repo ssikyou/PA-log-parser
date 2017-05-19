@@ -26,6 +26,9 @@ modules.builtin
 *~
 \#*#
 toolchains
+PAlogparser
+*.xlsx
+log.txt
 
 #
 # ctags and cscope files

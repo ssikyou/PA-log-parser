@@ -105,11 +105,13 @@ typedef struct event_parse_template {
 	int (* parse_clock)(void *clock, void *out);
 } event_parse_template;
 
+#define MAX_CMD_NUM 70
 typedef struct mmc_stats {
 	struct list_head requests_list;
 	GSList *cmd25_list;
 	GSList *cmd18_list;
 
+	int cmds_dist[MAX_CMD_NUM];	//for cmd distribution, 0~63 for normal cmds, 64~69 for alternative cmds
 } mmc_stats;
 
 #define RESP_R1  	0
@@ -119,6 +121,7 @@ typedef struct mmc_stats {
 #define RESP_UND	255
 
 typedef struct mmc_cmd {
+	unsigned int event_id;
 	unsigned short cmd_index;
 	unsigned int arg;
 	event_time time;
@@ -185,7 +188,8 @@ typedef struct mmc_parser {
 	mmc_cmd *cur_cmd;
 	mmc_request *prev_req;
 	mmc_request *cur_req;
-	mmc_pending_info *pending;	//if cur req is not finished, store next req in pending
+	//mmc_pending_info *pending;	//if cur req is not finished, store next req in pending
+	GSList *pending_list;
 	void *data;
 	int use_sbc;
 	int req_type;		//
