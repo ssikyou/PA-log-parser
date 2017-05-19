@@ -23,7 +23,8 @@ objects = \
 	funcs/func.o \
 	funcs/config.o \
 	funcs/cypress/file.o \
-	funcs/cypress/cypress.o
+	funcs/cypress/cypress.o \
+	funcs/cypress/cypress_cfg.o
 
 progs = PAlogparser
 depend_libs =

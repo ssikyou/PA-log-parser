@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "common.h"
 #include "emmcparser.h"
 #include "func.h"
 #include "func_ops.h"
@@ -79,7 +80,7 @@ int handle_large_request(func *f, mmc_request *req, int max_sectors)
 	unsigned int addr;
 	int total = req->sectors;
 	void *data = req->data;
-	int sectors, is_predefine = 0;
+	int is_predefine = 0;
 
 	if(req->cmd == NULL){
 		error("req->cmd is NULL");
@@ -145,10 +146,9 @@ int handle_large_request(func *f, mmc_request *req, int max_sectors)
 static int func_process_request(func *f, mmc_request *req)
 {
 	func_param *param = f->param;
-	config_info *cfg = param->cfg;
 
-	if((cfg->max_sectors > 0)&&((req->sectors > cfg->max_sectors)||(req->sbc && req->sbc->arg&0xfff > cfg->max_sectors))){
-		handle_large_request(f, req, cfg->max_sectors);
+	if((param->max_sectors > 0)&&((req->sectors > param->max_sectors)||(req->sbc && (req->sbc->arg&0xfff) > param->max_sectors))){
+		handle_large_request(f, req, param->max_sectors);
 	}else{
 		if(f->ops->request(f, req)){
 			printf("ERR: %s  func->ops->request fail\n", __func__);
