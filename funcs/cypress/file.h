@@ -24,7 +24,7 @@ typedef struct file_info{
 
 char * to_windows_path(char *path);
 int update_shell_file(file_info *file, char *buf, int len);
-int file_init(file_info *file, const char *log_name, const char *pattern);
+int file_init(file_info *file, const char *desc, const char *pattern, const char *log_name, int has_bins);
 int file_deinit(file_info *file);
 int create_intinc_file(const char *name, unsigned int *val, unsigned short blocks);
 int create_intdec_file(const char *name, unsigned int *val, unsigned short blocks);

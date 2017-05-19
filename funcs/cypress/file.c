@@ -19,7 +19,7 @@ char * to_windows_path(char *path)
     return path;
 }
 
-char *get_file_name(const char *path, int c)
+static char *get_file_name(const char *path, int c)
 {
     int len;
     const char *h,*t;
@@ -36,19 +36,39 @@ char *get_file_name(const char *path, int c)
     else
         len = t - h;
 
-return strndup(h, len);
+	return strndup(h, len);
 }
 
-
-char *get_file_path(const char *path, int c)
+static char *get_file_path(const char *path, int c)
 {
     char *h;
 
     h = strrchr(path,c);
     if(h == NULL)
-        return NULL;
+        return strdup(".");
 
     return strndup(path, h - path);
+}
+
+char *get_parent_path(const char *path, int c)
+{
+    char *h, tmp[255];
+	int len;
+
+	strcpy(tmp, path);
+    h = strrchr(tmp,c);
+    if(h == NULL)
+        return strdup(".");
+
+	len = h - tmp;
+	tmp[len] = 0;
+
+
+    h = strrchr(tmp,c);
+    if(h == NULL)
+        return strdup(".");
+
+    return strndup(tmp, h - tmp);
 }
 
 static int check_creat_dir(char *path)
@@ -79,31 +99,36 @@ static int check_creat_dir(char *path)
     return 0;
 }
 
-int file_init(file_info *file, const char *log_path, const char *pattern)
+int file_init(file_info *file, const char *desc, const char *pattern, const char *log_path, int need_bins)
 {
     char name[255];
     int fd, ret;
 
-    file->rid = 0;//file name id for read
-    file->wid = 0;//file name id for write
+
     dbg(L_INFO, "log path: %s\n", log_path);
     file->log_name = get_file_name(log_path, '/');
-    file->log_path = get_file_path(log_path, '/');
+    file->log_path = get_parent_path(log_path, '/');
     file->pattern = strdup(pattern);
-    sprintf(name,"%s/result/%s/%s/write",file->log_path, file->log_name, file->pattern);
 
-    file->write_path = strdup(name);
-    ret = check_creat_dir(file->write_path);
-    if(ret)
-        return ret;
+	if(need_bins){
+		file->rid = 0;//file name id for read
+		file->wid = 0;//file name id for write
+		sprintf(name,"%s/result/%s/%s/%s/write",file->log_path, desc, file->log_name, file->pattern);
 
-    sprintf(name,"%s/result/%s/%s/read",file->log_path, file->log_name, file->pattern);
-    file->read_path = strdup(name);
-    ret = check_creat_dir(file->read_path);
-    if(ret)
-        return ret;
+		file->write_path = strdup(name);
+		ret = check_creat_dir(file->write_path);
+		if(ret)
+		    return ret;
 
-    sprintf(name,"%s/result/%s/%s/%s.txt",file->log_path, file->log_name, file->pattern, file->log_name);
+		sprintf(name,"%s/result/%s/%s/%s/read",file->log_path, desc, file->log_name, file->pattern);
+		file->read_path = strdup(name);
+		ret = check_creat_dir(file->read_path);
+		if(ret)
+		    return ret;
+
+	}
+
+    sprintf(name,"%s/result/%s/%s/%s/%s.txt",file->log_path, desc, file->log_name, file->pattern, file->log_name);
     file->shell_name = strdup(name);
     fd = open(file->shell_name, O_CREAT | O_RDWR |O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
     if(fd == -1)
@@ -117,6 +142,10 @@ int file_deinit(file_info *file){
     if(file->log_name != NULL){
         free(file->log_name);
         file->log_name = NULL;
+    }
+    if(file->log_path != NULL){
+        free(file->log_path);
+        file->log_path = NULL;
     }
     if(file->pattern != NULL){
         free(file->pattern);

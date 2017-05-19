@@ -20,6 +20,7 @@ typedef struct cypress_cfg{
     unsigned char host_io;//1,4,8
     unsigned char data_rate;//0 sdr,1 ddr
     unsigned int host_clk;//unit KHz
+	int max_sectors;
 }cypress_cfg;
 
 typedef struct cypress{
@@ -81,7 +82,7 @@ static int cmd_rsp_mask(mmc_cmd *cmd)
 {
     switch(cmd->cmd_index){
         default:
-            return 0x100;
+            return 0x140;
     }
     return 0;
 }
@@ -110,7 +111,8 @@ static int format_cmd(mmc_cmd *cmd, cypress *press)
     rsp_mask = cmd_rsp_mask(cmd);
     cmp_type = cmd_compare_type(cmd);
 
-    len += sprintf(buf + len, "CMD%d,Argu=32'h%08x,RespSize=%d", cmd->cmd_index, cmd->arg, resp_size);
+    len += sprintf(buf + len, "CMD%d,Argu=32'h%08x,RespSize=%d",
+			cmd->cmd_index, cmd->arg, resp_size);
     if(resp_size == 32){
         if(cmp_type > 0){
         len += sprintf(buf + len, ",CompType=%d,Resp=32'h%08x", cmp_type, cmd->resp.r1);
@@ -175,8 +177,13 @@ static int handle_request(mmc_request *req, cypress *press)
     config_info *cfg = press->cfg;
     cypress_cfg *cy_cfg = (cypress_cfg *)cfg->priv;
 
+
 	if((press->exec_cmd1 == 2)&&(cmd->cmd_index == 1))
 		return 0;//only two cmd1
+	else if(cmd->cmd_index == 1)
+		press->exec_cmd1++;
+	else
+		press->exec_cmd1 = 0;
 
 	format_cmd(cmd, press);
 
@@ -187,14 +194,12 @@ static int handle_request(mmc_request *req, cypress *press)
 			len += sprintf(buf + len,"SetHost,CLK=400,IO=%d\n", cy_cfg->host_io);
             break;
         case 1:
-			press->exec_cmd1++;
             len += sprintf(buf + len,"sleep,time=500\n");
             break;
         case 16:
             cfg->block_size = cmd->arg;
             break;
         case 2:
-			press->exec_cmd1 = 0;
         case 3:
         case 7:
         case 9:
@@ -221,14 +226,19 @@ static int handle_request(mmc_request *req, cypress *press)
         case 17:
         case 18:
         case 21:
-            len += sprintf(buf + len,"DataR,IO=%d,DataRate=%s,BlockSize=%d,BlockNum=%d,SourceF=%s\n", cy_cfg->host_io, data_rate_str(cy_cfg->data_rate), cfg->block_size, block_count, get_read_file_path(req, press, path));
+            len += sprintf(buf + len,"DataR,IO=%d,DataRate=%s,BlockSize=%d,BlockNum=%d,SourceF=%s\n",
+				 cy_cfg->host_io, data_rate_str(cy_cfg->data_rate),
+				 cfg->block_size, block_count, get_read_file_path(req, press, path));
             break;
+		case 49:
         case 19:
         case 24:
         case 25:
         case 26:
         case 27:
-            len += sprintf(buf + len,"DataW,IO=%d,DataRate=%s,BlockSize=%d,BlockNum=%d,SourceF=%s\n", cy_cfg->host_io, data_rate_str(cy_cfg->data_rate), cfg->block_size, block_count, get_write_file_path(req, press, path));
+            len += sprintf(buf + len,"DataW,IO=%d,DataRate=%s,BlockSize=%d,BlockNum=%d,SourceF=%s\n",
+				 cy_cfg->host_io, data_rate_str(cy_cfg->data_rate),
+				 cfg->block_size, block_count, get_write_file_path(req, press, path));
             len += sprintf(buf + len,"DataWaitReady\n");
             break;
         default:
@@ -244,6 +254,7 @@ static config_list list[]={
     {.type = CFG_INT, .key = "host_io"},
     {.type = CFG_INT, .key = "data_rate"},
     {.type = CFG_INT, .key = "host_clk"},
+	{.type = CFG_INT, .key = "max_sectors"},
 };
 
 static int cypress_load_configs(mmc_parser *parser, func_param *param)
@@ -265,7 +276,7 @@ static int cypress_load_configs(mmc_parser *parser, func_param *param)
     cy_cfg->host_io = list[0].val_int;
     cy_cfg->data_rate = list[1].val_int;
     cy_cfg->host_clk = list[2].val_int;
-
+	cy_cfg->max_sectors = list[3].val_int;
     cfg->priv = cy_cfg;
     param->cfg = cfg;
     return 0;
@@ -278,18 +289,21 @@ static int cypress_config_init(cypress *press, func_param *param)
     cypress_cfg *cy_cfg = (cypress_cfg *)cfg->priv;
     int ret;
 
-    if((cy_cfg->host_io != HOST_IO_1BIT) && (cy_cfg->host_io != HOST_IO_4BIT) && (cy_cfg->host_io != HOST_IO_8BIT)){
+    if((cy_cfg->host_io != HOST_IO_1BIT) &&
+			(cy_cfg->host_io != HOST_IO_4BIT) &&
+			(cy_cfg->host_io != HOST_IO_8BIT)){
         error("ERR: %s invalid host_io:%d\n", __func__, cy_cfg->host_io);
         return -1;
     }
 
-    if((cy_cfg->data_rate != DATA_RATE_SDR) && (cy_cfg->data_rate != DATA_RATE_DDR)){
+    if((cy_cfg->data_rate != DATA_RATE_SDR) &&
+			(cy_cfg->data_rate != DATA_RATE_DDR)){
         error("ERR: %s invalid data_rate:%d\n", __func__, cy_cfg->data_rate);
         return -1;
     }
 
-    if(cy_cfg->host_clk >50000){
-        error("ERR: %s host_clk(%d) is too big for cypress\n", __func__, cy_cfg->host_clk);
+    if((cy_cfg->host_clk >50000)||(cy_cfg->host_clk < 400)){
+        error("ERR: %s host_clk(%d) out of range for cypress\n", __func__, cy_cfg->host_clk);
         return -1;
     }
 
@@ -313,7 +327,7 @@ int cypress_init(func* func, func_param *param)
         return ret;
     }
 
-    ret = file_init(&press->file, param->log_path, pattern_type_str(param->cfg->pattern_type));
+    ret = file_init(&press->file, func->desc, pattern_type_str(param->cfg->pattern_type), param->log_path, 1);
     if(ret){
         free(press);
         return ret;
@@ -324,10 +338,44 @@ int cypress_init(func* func, func_param *param)
     return ret;
 }
 
+static int handle_large_request(cypress *press, mmc_request *req)
+{
+	config_info *cfg = press->cfg;
+
+	mmc_cmd *cmd = req->cmd;
+    char buf[255], path[255];
+	int is_write, is_openend = 1, len = 0;
+
+	if(cmd->cmd_index == 25)
+		is_write = 1;
+	else if (cmd->cmd_index == 18)
+		is_write = 0;
+	else{
+		error("Err %s: cmd_index%d is large cmd?\n", __func__, cmd->cmd_index);
+		assert(0);
+	}
+
+	if(req->sbc != NULL)
+		is_openend = 0;
+
+	len += sprintf(buf + len, "LargeRw,BlockSize=%d,BlockNum=%d,isWrite=%d,isRandData=0,Addr=32'h%08x,isOpenEnd=%d,SourceF=%s\n",
+			cfg->block_size, req->sectors, is_write, cmd->arg,
+			is_openend,is_write?get_write_file_path(req, press, path):get_read_file_path(req, press, path));
+
+	update_shell_file(&press->file, buf, len);
+	return 0;
+}
+
 int cypress_request(func *func, mmc_request *req)
 {
     cypress *press = (cypress *)func->priv;
+	config_info *cfg = press->cfg;
+	cypress_cfg *cy_cfg = (cypress_cfg *)cfg->priv;
 
+	if((cfg->max_sectors > 0) && (req->sectors > cy_cfg->max_sectors)){
+		handle_large_request(press, req);
+		return 0;
+	}
     if(req->sbc){
         format_cmd(req->sbc, press);
     }

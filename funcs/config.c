@@ -21,6 +21,7 @@ static config_list list[]={
     {.type = CFG_INT, .key = "pattern_len"},
     {.type = CFG_INT, .key = "start_value"},
     {.type = CFG_INT, .key = "block_size"},
+	{.type = CFG_INT, .key = "max_sectors"},
 };
 
 const char *pattern_type_str(unsigned char pattern_type)
@@ -103,6 +104,7 @@ config_info *config_load(mmc_parser *parser, int *ret)
     cfg->pattern_len = list[2].val_int;
     cfg->start_value = list[3].val_int;
     cfg->block_size = list[4].val_int;
+	cfg->max_sectors = list[5].val_int;
     return cfg;
 }
 

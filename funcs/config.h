@@ -40,6 +40,7 @@ typedef struct config_info{
     int pattern_len;//user pattern data len
     unsigned int start_value;//for pattern increase or decrease, save user set int value.
     int block_size;
+	int max_sectors;// >0 use max_sectors
     void *priv;
 }config_info;
 
