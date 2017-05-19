@@ -30,6 +30,7 @@ typedef struct func_ops{
 typedef struct func{
     func_param *param;
     func_ops *ops;
+	char *desc;
     void *priv;
 }func;
 

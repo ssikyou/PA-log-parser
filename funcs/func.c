@@ -8,6 +8,8 @@
 
 static void func_set_ops(func *f, func_type type)
 {
+	char desc[25];
+
     switch(type){
     case FUNC_CYPRESS:
         f->ops = &cypress_ops;
@@ -15,6 +17,13 @@ static void func_set_ops(func *f, func_type type)
     case FUNC_XU4:
         break; 
     }
+	if(f->ops->desc)
+		f->desc = strdup(f->ops->desc);
+	else{
+
+		sprintf(desc, "func%d", type);
+		f->desc = strdup(desc);
+	}
 }
 
 int register_func(mmc_parser *parser, func_type type, char *log_path)
@@ -34,23 +43,26 @@ int register_func(mmc_parser *parser, func_type type, char *log_path)
 
     memset((void*)f, 0, sizeof(func));
 
+    param->log_path = strdup(log_path);
+    param->has_data = parser->has_data;
+    param->has_busy = parser->has_busy;
+
     func_set_ops(f, type);
-    if(f->ops == NULL|| f->ops->load_configs == NULL){
+    if(f->ops == NULL){
         printf("ERR: %s  func->ops is NULL\n", __func__);
         free(f);
         return -1;
     }
+	if(f->ops->load_configs){
+		f->ops->load_configs(parser,param);
+		if(param->cfg == NULL){
+		    printf("ERR: %s  param->cfg is NULL\n", __func__);
+		    free(f);
+		    return -1;
+		}
+	}
 
-    f->ops->load_configs(parser,param);
-    if(param->cfg == NULL){
-        printf("ERR: %s  param->cfg is NULL\n", __func__);
-        free(f);
-        return -1;
-    }
 
-    param->log_path = strdup(log_path);
-    param->has_data = parser->has_data;
-    param->has_busy = parser->has_busy;
 
     f->param = param;
     cb = alloc_req_cb(f->ops->desc, func_init, func_request, func_destory, f);
@@ -85,6 +97,8 @@ int handle_large_request(func *f, mmc_request *req, int max_sectors)
 	if(req->sbc){
 		memcpy(&sbc, req->sbc, sizeof(sbc));
 		sbc.cmd_index = req->sbc->cmd_index;
+		sbc.resp = req->sbc->resp;
+		sbc.resp_type = req->sbc->resp_type;
 		curr.sbc = &sbc;
 		curr.stop = NULL;
 		is_predefine = 1;
@@ -99,6 +113,8 @@ int handle_large_request(func *f, mmc_request *req, int max_sectors)
 	}
 
 	cmd.cmd_index = cmd_index;
+	cmd.resp = req->cmd->resp;
+	cmd.resp_type = req->cmd->resp_type;
 	curr.cmd = &cmd;
 
 	do{
@@ -204,6 +220,7 @@ int func_destory(mmc_parser *parser, void *arg)
         return -1;
     }
 
+	free(f->desc);
     free(f);
     return 0;
 }

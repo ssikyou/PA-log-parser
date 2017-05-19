@@ -82,7 +82,7 @@ static int cmd_rsp_mask(mmc_cmd *cmd)
 {
     switch(cmd->cmd_index){
         default:
-            return 0x100;
+            return 0x140;
     }
     return 0;
 }
@@ -230,6 +230,7 @@ static int handle_request(mmc_request *req, cypress *press)
 				 cy_cfg->host_io, data_rate_str(cy_cfg->data_rate),
 				 cfg->block_size, block_count, get_read_file_path(req, press, path));
             break;
+		case 49:
         case 19:
         case 24:
         case 25:
@@ -326,7 +327,7 @@ int cypress_init(func* func, func_param *param)
         return ret;
     }
 
-    ret = file_init(&press->file, param->log_path, pattern_type_str(param->cfg->pattern_type));
+    ret = file_init(&press->file, func->desc, pattern_type_str(param->cfg->pattern_type), param->log_path, 1);
     if(ret){
         free(press);
         return ret;
@@ -336,6 +337,7 @@ int cypress_init(func* func, func_param *param)
     func->priv = (void*)press;
     return ret;
 }
+
 static int handle_large_request(cypress *press, mmc_request *req)
 {
 	config_info *cfg = press->cfg;
