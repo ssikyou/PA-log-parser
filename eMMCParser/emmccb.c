@@ -1,16 +1,10 @@
 #include <stdio.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <limits.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <getopt.h>
 #include <string.h>
-#include <assert.h>
+#include <sys/stat.h>
 
 #include "emmcparser.h"
 #include "emmcxls.h"
@@ -246,6 +240,7 @@ int mmc_xls_init(mmc_parser *parser, char *csvpath)
 
 	mmc_xls_init_rw_dist(parser, csvpath, dir_name);
 	mmc_xls_init_cmd_dist(parser, csvpath, dir_name);
+	mmc_xls_init_sc_dist(parser, csvpath, dir_name);
 
 	return ret;
 }

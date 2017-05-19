@@ -20,6 +20,7 @@ objects = \
 	eMMCParser/emmccb.o \
 	eMMCParser/emmcxls_cmd_dist.o \
 	eMMCParser/emmcxls_rw_dist.o \
+	eMMCParser/emmcxls_sc_dist.o \
 	funcs/func.o \
 	funcs/config.o \
 	funcs/cypress/file.o \

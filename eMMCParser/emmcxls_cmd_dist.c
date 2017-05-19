@@ -1,16 +1,9 @@
 #include <stdio.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <limits.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <getopt.h>
 #include <string.h>
-#include <assert.h>
 
 #include "emmcparser.h"
 #include "emmcxls.h"
@@ -19,8 +12,7 @@
 #include "glib.h"
 
 /* commands distribution start */
-typedef struct cmd_dist_data
-{
+typedef struct cmd_dist_data {
 	GSList *list;
 	int total_cmd_counts;
 } cmd_dist_data;

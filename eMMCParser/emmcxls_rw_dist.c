@@ -1,16 +1,9 @@
 #include <stdio.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <limits.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <getopt.h>
 #include <string.h>
-#include <assert.h>
 
 #include "emmcparser.h"
 #include "emmcxls.h"
@@ -24,7 +17,8 @@ void print_xls_entry(gpointer item, gpointer user_data) {
 	dbg(L_DEBUG, "[%d] (%s) %d %f\n", entry->idx, entry->idx_desc, entry->val, entry->val_1);
 }
 
-gint find_index(gconstpointer item1, gconstpointer item2) {
+/* find the value of type int */
+gint find_int(gconstpointer item1, gconstpointer item2) {
 	xls_data_entry *entry = item1;
 
 	if (entry->idx == *(int *)item2)
@@ -33,8 +27,8 @@ gint find_index(gconstpointer item1, gconstpointer item2) {
 		return -1;
 }
 
-/* item1 is list item, item2 is user data*/
-gint find_acs(gconstpointer item1, gconstpointer item2) {
+/* compare int value, acs ordering, item1 is list item, item2 is user data*/
+gint compare_int_acs(gconstpointer item1, gconstpointer item2) {
 	xls_data_entry *entry = item1;
 	xls_data_entry *user = item2;
 
@@ -95,7 +89,7 @@ void *prep_data_rw_dist(mmc_parser *parser, xls_config *config, int type)
 		int index = req->max_delay/config->x_steps;
 		
 		dbg(L_DEBUG, "index:%d\n", index);
-		item = g_slist_find_custom(dist_list, &index, (GCompareFunc)find_index);
+		item = g_slist_find_custom(dist_list, &index, (GCompareFunc)find_int);
 		if (item) {
 			dbg(L_DEBUG, "item exsit\n");
 			((xls_data_entry *)item->data)->val += 1;
@@ -110,7 +104,7 @@ void *prep_data_rw_dist(mmc_parser *parser, xls_config *config, int type)
 			entry->val = 1;		//req counts
 			entry->val_1 = 0;	//percentage
 
-			dist_list = g_slist_insert_sorted(dist_list, entry, (GCompareFunc)find_acs);
+			dist_list = g_slist_insert_sorted(dist_list, entry, (GCompareFunc)compare_int_acs);
 
 		}
 		

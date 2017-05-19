@@ -1,13 +1,7 @@
 #include <stdio.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <limits.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <getopt.h>
 #include <string.h>
 #include <assert.h>
