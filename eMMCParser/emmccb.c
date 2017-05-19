@@ -633,6 +633,14 @@ int mmc_xls_init(mmc_parser *parser, char *csvpath)
 {
 	GKeyFile* gkf = parser->gkf;
 	GError *error;
+	char *dir_name = "out";
+	if (access(dir_name, F_OK|R_OK|W_OK|X_OK)) {
+		int ret = mkdir(dir_name, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+		if (ret) {
+			perror("mkdir dir failed");
+			dir_name = NULL;
+		}
+	}
 
 	if (parser->has_busy && g_key_file_has_group(gkf, "Write Busy Dist")) {
     	char *file_name_suffix = g_key_file_get_value(gkf, "Write Busy Dist", "file_name_suffix", &error);
@@ -648,6 +656,10 @@ int mmc_xls_init(mmc_parser *parser, char *csvpath)
 		memset(filename, 0, sizeof(filename));
 		char **tokens = g_strsplit_set(csvpath, "/.", -1);
 		int nums = g_strv_length(tokens);
+		if (dir_name) {
+			strcat(filename, dir_name);
+			strcat(filename, "/");
+		}
 		strcat(filename, tokens[nums-2]);
 		strcat(filename, file_name_suffix);
 		strcat(filename, ".xlsx");
@@ -692,6 +704,10 @@ int mmc_xls_init(mmc_parser *parser, char *csvpath)
 		memset(filename, 0, sizeof(filename));
 		char **tokens = g_strsplit_set(csvpath, "/.", -1);
 		int nums = g_strv_length(tokens);
+		if (dir_name) {
+			strcat(filename, dir_name);
+			strcat(filename, "/");
+		}
 		strcat(filename, tokens[nums-2]);
 		strcat(filename, file_name_suffix);
 		strcat(filename, ".xlsx");
@@ -732,6 +748,10 @@ int mmc_xls_init(mmc_parser *parser, char *csvpath)
 		memset(filename, 0, sizeof(filename));
 		char **tokens = g_strsplit_set(csvpath, "/.", -1);
 		int nums = g_strv_length(tokens);
+		if (dir_name) {
+			strcat(filename, dir_name);
+			strcat(filename, "/");
+		}
 		strcat(filename, tokens[nums-2]);
 		strcat(filename, file_name_suffix);
 		strcat(filename, ".xlsx");
