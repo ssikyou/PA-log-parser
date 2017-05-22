@@ -182,8 +182,51 @@ int mmc_xls_init_sc_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 
 		cb->config->filename = strdup(filename);
 		cb->config->chart_type = LXW_CHART_COLUMN;
-		cb->config->chart_title_name = "Write Sector Distribution";
-		cb->config->serie_name = "Write Sector Dist";
+		cb->config->chart_title_name = "CMD25 Sector Distribution";
+		cb->config->serie_name = "CMD25 Sector Dist";
+		cb->config->chart_x_name = "Sectors";
+		cb->config->chart_y_name = "Percentage";
+		cb->config->chart_row = lxw_name_to_row("F8");
+		cb->config->chart_col = lxw_name_to_col("F8");
+		cb->config->chart_x_scale = 3;
+		cb->config->chart_y_scale = 2;
+
+		mmc_register_xls_cb(parser, cb);
+    }
+
+    if (g_key_file_has_group(gkf, "Read Sector Dist")) {
+    	char *file_name_suffix = g_key_file_get_value(gkf, "Read Sector Dist", "file_name_suffix", &error);
+    	if (file_name_suffix == NULL) {
+    		file_name_suffix = "_r_sc";
+    	}
+
+    	char filename[256];
+		memset(filename, 0, sizeof(filename));
+		char **tokens = g_strsplit_set(csvpath, "/.", -1);
+		int nums = g_strv_length(tokens);
+		if (dir_name) {
+			strcat(filename, dir_name);
+			strcat(filename, "/");
+		}
+		strcat(filename, tokens[nums-2]);
+		strcat(filename, file_name_suffix);
+		strcat(filename, ".xlsx");
+		g_strfreev(tokens);
+	    dbg(L_DEBUG, "filename:%s nums:%d\n", filename, nums);
+
+		//alloc xls callback
+		mmc_xls_cb *cb = alloc_xls_cb();
+		//init
+		cb->desc = "Read Sector Dist";
+		cb->prep_data = prep_data_sc_dist_r;
+		cb->write_data = write_data_sc_dist;
+		cb->create_chart = create_chart;
+		cb->release_data = release_data_sc_dist;
+
+		cb->config->filename = strdup(filename);
+		cb->config->chart_type = LXW_CHART_COLUMN;
+		cb->config->chart_title_name = "CMD18 Sector Distribution";
+		cb->config->serie_name = "CMD18 Sector Dist";
 		cb->config->chart_x_name = "Sectors";
 		cb->config->chart_y_name = "Percentage";
 		cb->config->chart_row = lxw_name_to_row("F8");
