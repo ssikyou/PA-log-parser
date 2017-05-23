@@ -1,13 +1,7 @@
 #include <stdio.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <limits.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <getopt.h>
 #include <string.h>
 
@@ -92,11 +86,11 @@ static const char *cmd_help =
 	"arguments:\n"
 	"\tcsvfile: csv file path\n"
 	"options:\n"
-	"\t--debug: print debug messages\n"
-	"\t--quite: only print error messages\n"
+	"\t--debug: print debug messages to log.txt\n"
+	"\t--quite: only print error messages to log.txt\n"
 	"\t--line: only parse first n lines, if not set, all lines will be parsed\n"
 	"Example:\n"
-	"\tPAlogparser --line=100 test.csv\n";
+	"\tPAlogparser -q test.csv\n";
 
 int main(int argc, char **argv)
 {
@@ -193,7 +187,8 @@ int main(int argc, char **argv)
     }
 
     //g_debug_level = L_DEBUG;
-    dump_req_list(&parser->stats.requests_list);
+    if (g_debug_level == L_DEBUG)
+    	dump_req_list(&parser->stats.requests_list);
 
     generate_xls(parser);
 

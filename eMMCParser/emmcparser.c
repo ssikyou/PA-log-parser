@@ -1,13 +1,7 @@
 #include <stdio.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <limits.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <getopt.h>
 #include <string.h>
 #include <assert.h>
@@ -602,8 +596,8 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 
 				unsigned int busy_time;
 				ept->parse_info(rowFields[COL_INFO], &busy_time);
-				//cmd12's busy time is added to the last write's busy time
-				if (!parser->cur_req->stop && parser->trans_cnt<=parser->cur_req->sectors)
+				//init write busy time, cmd12's busy time is added to the last write's busy time
+				if (!parser->cur_req->stop && !parser->pending_list && parser->trans_cnt<=parser->cur_req->sectors)
 					parser->cur_req->delay[parser->trans_cnt-1] = busy_time;
 
 				assert(parser->trans_cnt<=parser->cur_req->sectors);
