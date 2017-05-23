@@ -16,6 +16,7 @@ static config_list list[]={
     {.type = CFG_INT, .key = "data_rate"},
     {.type = CFG_INT, .key = "host_clk"},
 	{.type = CFG_INT, .key = "self_div"},
+	{.type = CFG_INT, .key = "comp_mask"},
 };
 
 
@@ -70,6 +71,7 @@ int cypress_load_configs(mmc_parser *parser, func_param *param)
     cfg->data_rate = list[7].val_int;
     cfg->host_clk = list[8].val_int;
 	cfg->self_div = list[9].val_int;
+	cfg->comp_mask = list[10].val_int;
 
 	param->cfg = (void *)cfg;
 	if((cfg->self_div == 0 )&&(cfg->max_sectors > 0))
@@ -93,7 +95,7 @@ int cypress_config_init(cypress_cfg *cfg, int has_data)
     }
 
     if((has_data == 0) && (cfg->pattern_type == PATTERN_FROMLOG)) {
-        printf("ERR: %s data pattern is NULL or pattern_len == 0\n", __func__);
+        printf("ERR: %s no data field in soure file\n", __func__);
         return -1;
     }
 
