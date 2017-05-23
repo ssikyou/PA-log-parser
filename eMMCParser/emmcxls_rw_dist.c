@@ -88,13 +88,13 @@ void *prep_data_rw_dist(mmc_parser *parser, xls_config *config, int type)
 		req = (mmc_request *)iterator->data;
 		int index = req->max_delay/config->x_steps;
 		
-		dbg(L_DEBUG, "index:%d\n", index);
+		//dbg(L_DEBUG, "index:%d\n", index);
 		item = g_slist_find_custom(dist_list, &index, (GCompareFunc)find_int);
 		if (item) {
-			dbg(L_DEBUG, "item exsit\n");
+			//dbg(L_DEBUG, "item exsit\n");
 			((xls_data_entry *)item->data)->val += 1;
 		} else {
-			dbg(L_DEBUG, "create new item\n");
+			//dbg(L_DEBUG, "create new item\n");
 			xls_data_entry *entry = calloc(1, sizeof(xls_data_entry));
 			entry->idx = index;
 			char tmp[20];
@@ -228,6 +228,8 @@ int create_chart(lxw_workbook *workbook, lxw_worksheet *worksheet, xls_config *c
     chart_series_set_categories(series, "Sheet1", config->x1_area.first_row, config->x1_area.first_col, config->x1_area.last_row, config->x1_area.last_col);
     chart_series_set_values(series, "Sheet1", config->y1_area.first_row, config->y1_area.first_col, config->y1_area.last_row, config->y1_area.last_col);
     chart_series_set_name(series, config->serie_name);
+    chart_series_set_marker_type(series, LXW_CHART_MARKER_CIRCLE);
+    chart_series_set_marker_size(series, 1);
 
     chart_title_set_name(chart, config->chart_title_name);
     chart_axis_set_name(chart->x_axis, config->chart_x_name);

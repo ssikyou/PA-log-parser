@@ -7,7 +7,7 @@
 
 typedef struct xls_data_entry
 {
-	int idx;
+	unsigned int idx;
 	char *idx_desc;
 	int val;
 	double val_1;

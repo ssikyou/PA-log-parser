@@ -15,10 +15,12 @@
 static int classify_req(struct mmc_parser *parser, void *arg);
 static int calc_max_delay(struct mmc_parser *parser, void *arg);
 static int calc_cmd_counts(struct mmc_parser *parser, void *arg);
+static int calc_idle_time(struct mmc_parser *parser, void *arg);
 mmc_req_cb cbs[] = {
 	{"classify request to different lists", NULL, classify_req, NULL, NULL},
 	{"calc read/write max latency/busy time", NULL, calc_max_delay, NULL, NULL},
 	{"calc cmd counts", NULL, calc_cmd_counts, NULL, NULL},
+	{"calc request's idle time/interval time of previous request", NULL, calc_idle_time, NULL, NULL},
 };
 
 mmc_req_cb *alloc_req_cb(char *desc, int (* init)(struct mmc_parser *parser, void *arg), 
@@ -87,7 +89,8 @@ static int calc_max_delay(struct mmc_parser *parser, void *arg)
 {
 	int index;
 
-	if (parser->cur_req->cmd && (is_wr_cmd(parser->cur_req->cmd->cmd_index) || is_rd_cmd(parser->cur_req->cmd->cmd_index))) {
+	if (parser->cur_req->cmd && ((parser->has_busy && is_wr_cmd(parser->cur_req->cmd->cmd_index)) || 
+		(parser->has_data && is_rd_cmd(parser->cur_req->cmd->cmd_index)))) {
 		if (parser->cur_req->delay!=NULL) {
 			index = find_maximum(parser->cur_req->delay, parser->cur_req->sectors);
 			parser->cur_req->max_delay = parser->cur_req->delay[index];
@@ -111,6 +114,23 @@ static int calc_cmd_counts(struct mmc_parser *parser, void *arg)
 
 	if (parser->cur_req->stop)
 		parser->stats.cmds_dist[TYPE_12]++;
+
+	return 0;
+}
+
+static int calc_idle_time(struct mmc_parser *parser, void *arg)
+{
+	if (parser->has_busy && parser->has_data) {
+		if (parser->cur_req->sbc) {
+			parser->cur_req->idle_time = parser->cur_req->sbc->time.interval_us;
+		} else if (parser->cur_req->cmd) {
+			parser->cur_req->idle_time = parser->cur_req->cmd->time.interval_us;
+		} else if (parser->cur_req->stop) {
+			parser->cur_req->idle_time = parser->cur_req->stop->time.interval_us;
+		} else {
+			error("calc_idle_time cur req is wrong!\n");
+		}
+	}
 
 	return 0;
 }
@@ -241,6 +261,8 @@ int mmc_xls_init(mmc_parser *parser, char *csvpath)
 	mmc_xls_init_rw_dist(parser, csvpath, dir_name);
 	mmc_xls_init_cmd_dist(parser, csvpath, dir_name);
 	mmc_xls_init_sc_dist(parser, csvpath, dir_name);
+	mmc_xls_init_addr_dist(parser, csvpath, dir_name);
+	mmc_xls_init_idle_dist(parser, csvpath, dir_name);
 
 	return ret;
 }
@@ -253,6 +275,8 @@ int generate_xls(mmc_parser *parser)
 	for (iterator = xls_list; iterator; iterator = iterator->next) {
 		mmc_xls_cb *xls_cb = (mmc_xls_cb *)iterator->data;
 		
+		dbg(L_DEBUG, "\ngenerating excel for [%s]\n", xls_cb->desc);
+
 		lxw_workbook *workbook  = workbook_new(xls_cb->config->filename);
 	    lxw_worksheet *worksheet = workbook_add_worksheet(workbook, NULL);
 

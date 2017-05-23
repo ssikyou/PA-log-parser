@@ -14,17 +14,25 @@
 extern gint find_int(gconstpointer item1, gconstpointer item2);
 extern gint compare_int_acs(gconstpointer item1, gconstpointer item2);
 
-typedef struct sc_dist_data {
+typedef struct addr_dist_data {
 	GSList *list;
 	int total_req_counts;
-	int max_sectors;
-} sc_dist_data;
+} addr_dist_data;
 
-void *prep_data_sc_dist(mmc_parser *parser, xls_config *config, int type)
+/* find the value of type unsigned int */
+gint find_uint(gconstpointer item1, gconstpointer item2) {
+	xls_data_entry *entry = item1;
+
+	if (entry->idx == *(unsigned int *)item2)
+		return 0;
+	else
+		return -1;
+}
+
+void *prep_data_addr_dist(mmc_parser *parser, xls_config *config, int type)
 {
-	int max_sectors = 0;
 	int req_counts = 0;
-	int sectors = 0;
+	unsigned int address = 0;
 	mmc_request *req;
 	GSList *req_list = NULL;
 
@@ -33,36 +41,30 @@ void *prep_data_sc_dist(mmc_parser *parser, xls_config *config, int type)
 	else
 		req_list = parser->stats.cmd18_list;
 
-	sc_dist_data *result = calloc(1, sizeof(sc_dist_data));
+	addr_dist_data *result = calloc(1, sizeof(addr_dist_data));
 	GSList *dist_list = NULL;
 	GSList *item = NULL, *iterator = NULL;
 
 	for (iterator = req_list; iterator; iterator = iterator->next) {
 		req_counts++;
 		req = (mmc_request *)iterator->data;
-		sectors = req->sectors;
+		address = req->cmd->arg;
 		
-		item = g_slist_find_custom(dist_list, &sectors, (GCompareFunc)find_int);
+		item = g_slist_find_custom(dist_list, &address, (GCompareFunc)find_uint);
 		if (item) {
-			//dbg(L_DEBUG, "item exsit\n");
 			((xls_data_entry *)item->data)->val += 1;
 		} else {
-			//dbg(L_DEBUG, "create new item\n");
 			xls_data_entry *entry = calloc(1, sizeof(xls_data_entry));
-			entry->idx = sectors;
+			entry->idx = address;
 
-			entry->val = 1;		//sc counts
+			entry->val = 1;		//addr counts
 			entry->val_1 = 0;	//percentage
 
 			dist_list = g_slist_insert_sorted(dist_list, entry, (GCompareFunc)compare_int_acs);
 
 		}
-		
-		if (sectors > max_sectors)
-			max_sectors = sectors;
-	}
 
-	dbg(L_DEBUG, "max sectors: %d, all req counts:%d\n", max_sectors, req_counts);
+	}
 
 	//calc percentage
 	for (iterator = dist_list; iterator; iterator = iterator->next) {
@@ -75,24 +77,23 @@ void *prep_data_sc_dist(mmc_parser *parser, xls_config *config, int type)
 
 	result->list = dist_list;
 	result->total_req_counts = req_counts;
-	result->max_sectors = max_sectors;
 
 	return result;
 }
 
-void *prep_data_sc_dist_w(mmc_parser *parser, xls_config *config)
+void *prep_data_addr_dist_w(mmc_parser *parser, xls_config *config)
 {
-	return prep_data_sc_dist(parser, config, 1);	//1->write, 0->read
+	return prep_data_addr_dist(parser, config, 1);	//1->write, 0->read
 }
 
-void *prep_data_sc_dist_r(mmc_parser *parser, xls_config *config)
+void *prep_data_addr_dist_r(mmc_parser *parser, xls_config *config)
 {
-	return prep_data_sc_dist(parser, config, 0);	//1->write, 0->read
+	return prep_data_addr_dist(parser, config, 0);	//1->write, 0->read
 }
 
-int write_data_sc_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_config *config)
+int write_data_addr_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_config *config)
 {
-	sc_dist_data *result = data;
+	addr_dist_data *result = data;
 	GSList *dist_list = result->list;
 	GSList *iterator = NULL;
 	int row=0, col=0;
@@ -132,29 +133,26 @@ int write_data_sc_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *d
     worksheet_write_string(worksheet, CELL("F1"), "Total Requests", bold);
     worksheet_write_number(worksheet, CELL("F2"), result->total_req_counts, NULL);
 
-     worksheet_write_string(worksheet, CELL("G1"), "Max Sectors", bold);
-    worksheet_write_number(worksheet, CELL("G2"), result->max_sectors, NULL);
-
  	return 0;
 }
 
-void release_data_sc_dist(void *data)
+void release_data_addr_dist(void *data)
 {
-	sc_dist_data *result = data;
+	addr_dist_data *result = data;
 	GSList *dist_list = result->list;
 	g_slist_free_full(dist_list, (GDestroyNotify)destroy_xls_entry);
 	free(result);
 }
 
-int mmc_xls_init_sc_dist(mmc_parser *parser, char *csvpath, char *dir_name)
+int mmc_xls_init_addr_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 {
 	GKeyFile* gkf = parser->gkf;
 	GError *error;
 
-    if (g_key_file_has_group(gkf, "Write Sector Dist")) {
-    	char *file_name_suffix = g_key_file_get_value(gkf, "Write Sector Dist", "file_name_suffix", &error);
+    if (g_key_file_has_group(gkf, "Write Address Dist")) {
+    	char *file_name_suffix = g_key_file_get_value(gkf, "Write Address Dist", "file_name_suffix", &error);
     	if (file_name_suffix == NULL) {
-    		file_name_suffix = "_w_sc";
+    		file_name_suffix = "_w_addr";
     	}
 
     	char filename[256];
@@ -174,17 +172,17 @@ int mmc_xls_init_sc_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 		//alloc xls callback
 		mmc_xls_cb *cb = alloc_xls_cb();
 		//init
-		cb->desc = "Write Sector Dist";
-		cb->prep_data = prep_data_sc_dist_w;
-		cb->write_data = write_data_sc_dist;
+		cb->desc = "Write Address Dist";
+		cb->prep_data = prep_data_addr_dist_w;
+		cb->write_data = write_data_addr_dist;
 		cb->create_chart = create_chart;
-		cb->release_data = release_data_sc_dist;
+		cb->release_data = release_data_addr_dist;
 
 		cb->config->filename = strdup(filename);
-		cb->config->chart_type = LXW_CHART_COLUMN;
-		cb->config->chart_title_name = "CMD25 Sector Distribution";
-		cb->config->serie_name = "CMD25 Sector Dist";
-		cb->config->chart_x_name = "Sectors";
+		cb->config->chart_type = LXW_CHART_SCATTER;
+		cb->config->chart_title_name = "CMD25 Address Distribution";
+		cb->config->serie_name = "CMD25 Address Dist";
+		cb->config->chart_x_name = "Address";
 		cb->config->chart_y_name = "Percentage";
 		cb->config->chart_row = lxw_name_to_row("F8");
 		cb->config->chart_col = lxw_name_to_col("F8");
@@ -194,10 +192,10 @@ int mmc_xls_init_sc_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 		mmc_register_xls_cb(parser, cb);
     }
 
-    if (g_key_file_has_group(gkf, "Read Sector Dist")) {
-    	char *file_name_suffix = g_key_file_get_value(gkf, "Read Sector Dist", "file_name_suffix", &error);
+    if (g_key_file_has_group(gkf, "Read Address Dist")) {
+    	char *file_name_suffix = g_key_file_get_value(gkf, "Read Address Dist", "file_name_suffix", &error);
     	if (file_name_suffix == NULL) {
-    		file_name_suffix = "_r_sc";
+    		file_name_suffix = "_r_addr";
     	}
 
     	char filename[256];
@@ -217,17 +215,17 @@ int mmc_xls_init_sc_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 		//alloc xls callback
 		mmc_xls_cb *cb = alloc_xls_cb();
 		//init
-		cb->desc = "Read Sector Dist";
-		cb->prep_data = prep_data_sc_dist_r;
-		cb->write_data = write_data_sc_dist;
+		cb->desc = "Read Address Dist";
+		cb->prep_data = prep_data_addr_dist_r;
+		cb->write_data = write_data_addr_dist;
 		cb->create_chart = create_chart;
-		cb->release_data = release_data_sc_dist;
+		cb->release_data = release_data_addr_dist;
 
 		cb->config->filename = strdup(filename);
-		cb->config->chart_type = LXW_CHART_COLUMN;
-		cb->config->chart_title_name = "CMD18 Sector Distribution";
-		cb->config->serie_name = "CMD18 Sector Dist";
-		cb->config->chart_x_name = "Sectors";
+		cb->config->chart_type = LXW_CHART_SCATTER;
+		cb->config->chart_title_name = "CMD18 Address Distribution";
+		cb->config->serie_name = "CMD18 Address Dist";
+		cb->config->chart_x_name = "Address";
 		cb->config->chart_y_name = "Percentage";
 		cb->config->chart_row = lxw_name_to_row("F8");
 		cb->config->chart_col = lxw_name_to_col("F8");

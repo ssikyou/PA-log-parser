@@ -130,6 +130,11 @@ int main(int argc, char **argv)
 	if(helper_arg(1, 1, &argc, &argv, cmd_help) != 0)
 		return -1;
 
+	if (access(argv[0], F_OK|R_OK)) {
+		perror("csv file error");
+		exit(EXIT_FAILURE);
+	}
+
 	g_log_file = fopen("log.txt", "w+");
     if (g_log_file < 0) {
     	perror("open log.txt failed");
@@ -181,14 +186,15 @@ int main(int argc, char **argv)
 		*/
 		mmc_row_parse(parser, CsvParser_getFields(row), CsvParser_getNumFields(row));
 
-
 		cur_line++;
         CsvParser_destroy_row(row);
     }
 
+    mmc_parser_end(parser);
+
     //g_debug_level = L_DEBUG;
     if (g_debug_level == L_DEBUG)
-    	dump_req_list(&parser->stats.requests_list);
+    	dump_req_list(parser->stats.requests_list);
 
     generate_xls(parser);
 

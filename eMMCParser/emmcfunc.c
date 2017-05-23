@@ -307,15 +307,14 @@ int is_rd_cmd(unsigned char event_type)
 	return ret;
 }
 
-void dump_req_list(struct list_head *list)
+void dump_req_list(GSList *list)
 {
 	mmc_request *req;
-
-	list_for_each_entry(req, list, req_node) {
-
+	GSList *iterator;
+	for (iterator = list; iterator; iterator = iterator->next) {
+		req = (mmc_request *)iterator->data;
 		dump_req(req);
 	}
-
 }
 
 void dump_cmd(mmc_cmd *cmd)
