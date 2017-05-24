@@ -503,6 +503,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 			}
 		break;
 
+		case TYPE_14:
 		case TYPE_17:
 			begin_request(parser, 0, cmd, REQ_RD, 1);
 		break;
@@ -541,6 +542,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 
 		break;
 
+		case TYPE_19:
 		case TYPE_24:
 			begin_request(parser, 0, cmd, REQ_WR, 1);
 		break;
@@ -584,7 +586,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 
 				//sbc write, has data, no busy
 				if (parser->trans_cnt == parser->cur_req->sectors && !has_busy && 
-					(parser->cur_req->sbc || parser->cur_req->cmd->cmd_index==TYPE_24)) {
+					(parser->cur_req->sbc || parser->cur_req->cmd->cmd_index==TYPE_24 || parser->cur_req->cmd->cmd_index==TYPE_19)) {
 					end_request(parser);
 				}
 			}
@@ -735,7 +737,8 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 					(parser->cur_req->sbc || 
 					parser->cur_req->cmd->cmd_index==TYPE_17 || 
 					parser->cur_req->cmd->cmd_index==TYPE_8 ||
-					parser->cur_req->cmd->cmd_index==TYPE_21)) {
+					parser->cur_req->cmd->cmd_index==TYPE_21 ||
+					parser->cur_req->cmd->cmd_index==TYPE_14)) {
 					calc_req_total_time(parser->cur_req, time.time_us);
 
 					end_request(parser);
@@ -785,6 +788,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 				break;
 
 				case TYPE_8:
+				case TYPE_14:
 				case TYPE_17:
 				case TYPE_21:
 					if (!has_data) {	//the total time is not accurate!
@@ -800,6 +804,13 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 						end_request(parser);
 					}
 
+				break;
+
+				case TYPE_19:
+					//no data
+					if (!has_data) {
+						end_request(parser);
+					}
 				break;
 
 				case TYPE_24:
@@ -890,7 +901,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 			parser->cur_cmd->resp_type = RESP_R3;
 			ept->parse_data(rowFields[COL_DATA], &parser->cur_cmd->resp.r3);
 			ept->parse_info(rowFields[COL_INFO], &parser->cur_cmd->resp_err);
-			
+
 			calc_req_total_time(parser->cur_req, time.time_us);
 			end_request(parser);
 

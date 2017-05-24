@@ -63,7 +63,9 @@ typedef struct mmc_row {
 #define TYPE_10		10
 #define TYPE_12		12
 #define TYPE_13		13
+#define TYPE_14		14
 #define TYPE_16		16
+#define TYPE_19		19
 
 //Read
 #define TYPE_17		17
