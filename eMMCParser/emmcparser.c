@@ -166,7 +166,7 @@ mmc_parser *mmc_parser_init(int has_data, int has_busy, char *config_file)
     //error("g_log_file: %d\n", g_log_fd);
 
     parser->pending_list = NULL;
-	INIT_LIST_HEAD(&parser->stats.requests_list);
+	parser->stats.requests_list = NULL;
 	parser->stats.cmd25_list = NULL;
 	parser->stats.cmd18_list = NULL;
 
@@ -188,12 +188,13 @@ fail:
 
 void mmc_parser_destroy(mmc_parser *parser)
 {
-	mmc_request *req, *tmp;
-
-	list_for_each_entry_safe(req, tmp, &parser->stats.requests_list, req_node) {
-		list_del(&req->req_node);
+	mmc_request *req;
+	GSList *iterator;
+	for (iterator = parser->stats.requests_list; iterator; iterator = iterator->next) {
+		req = (mmc_request *)iterator->data;
 		destroy_req(req);
 	}
+	g_slist_free(parser->stats.requests_list);
 
 	if (parser->stats.cmd25_list)
 		g_slist_free(parser->stats.cmd25_list);
@@ -267,7 +268,8 @@ static mmc_request *begin_request(mmc_parser *parser, int is_sbc, mmc_cmd *cmd, 
 
 	parser->cur_req = req;
 	parser->req_type = req_type;
-	list_add_tail(&req->req_node, &parser->stats.requests_list);
+	//list_add_tail(&req->req_node, &parser->stats.requests_list);
+	parser->stats.requests_list = g_slist_prepend(parser->stats.requests_list, req);
 
 	return req;
 }
@@ -330,7 +332,8 @@ static void end_pending(mmc_parser *parser, mmc_pending_info *pending)
 	parser->cur_cmd = pending->cmd;
 	parser->cur_req = pending->req;
 	parser->req_type = pending->req_type;
-	list_add_tail(&parser->cur_req->req_node, &parser->stats.requests_list);
+	//list_add_tail(&parser->cur_req->req_node, &parser->stats.requests_list);
+	parser->stats.requests_list = g_slist_prepend(parser->stats.requests_list, parser->cur_req);
 	//clean pending info
 	//parser->pending->cmd = NULL;
 	//parser->pending->req = NULL;
@@ -341,6 +344,14 @@ static void calc_req_total_time(mmc_request *req, unsigned int end_time_us)
 {
 	assert(req->cmd!=NULL);
 	req->total_time = end_time_us - req->cmd->time.time_us;
+}
+
+int mmc_parser_end(mmc_parser *parser)
+{
+	parser->stats.requests_list = g_slist_reverse(parser->stats.requests_list);
+	parser->stats.cmd25_list = g_slist_reverse(parser->stats.cmd25_list);
+	parser->stats.cmd18_list = g_slist_reverse(parser->stats.cmd18_list);
+	return 0;
 }
 
 int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
@@ -516,6 +527,10 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 
 			}
 
+		break;
+
+		case TYPE_21:
+			begin_request(parser, 0, cmd, REQ_RD, 1);
 		break;
 
 		case TYPE_23:
@@ -717,7 +732,10 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 				dbg(L_DEBUG, "cur trans count:%d, all sc:%d\n", parser->trans_cnt, parser->cur_req->sectors);
 				//sbc read with data info
 				if (parser->trans_cnt == parser->cur_req->sectors && 
-					(parser->cur_req->sbc || parser->cur_req->cmd->cmd_index==TYPE_17 || parser->cur_req->cmd->cmd_index==TYPE_8)) {
+					(parser->cur_req->sbc || 
+					parser->cur_req->cmd->cmd_index==TYPE_17 || 
+					parser->cur_req->cmd->cmd_index==TYPE_8 ||
+					parser->cur_req->cmd->cmd_index==TYPE_21)) {
 					calc_req_total_time(parser->cur_req, time.time_us);
 
 					end_request(parser);
@@ -737,6 +755,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 			//fill in cur cmd's resp
 			parser->cur_cmd->resp_type = RESP_R1;
 			ept->parse_data(rowFields[COL_DATA], &parser->cur_cmd->resp.r1);
+			ept->parse_info(rowFields[COL_INFO], &parser->cur_cmd->resp_err);
 
 			switch (parser->cur_cmd->cmd_index) {
 				case TYPE_13:
@@ -767,6 +786,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 
 				case TYPE_8:
 				case TYPE_17:
+				case TYPE_21:
 					if (!has_data) {	//the total time is not accurate!
 						calc_req_total_time(parser->cur_req, time.time_us);
 						end_request(parser);
@@ -809,6 +829,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 			//fill in cur cmd's resp
 			parser->cur_cmd->resp_type = RESP_R1B;
 			ept->parse_data(rowFields[COL_DATA], &parser->cur_cmd->resp.r1b);
+			ept->parse_info(rowFields[COL_INFO], &parser->cur_cmd->resp_err);
 
 			switch (parser->cur_cmd->cmd_index) {
 				case TYPE_12:
@@ -851,6 +872,7 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 			//fill in cur cmd's resp
 			parser->cur_cmd->resp_type = RESP_R2;
 			ept->parse_data(rowFields[COL_DATA], parser->cur_cmd->resp.r2);
+			ept->parse_info(rowFields[COL_INFO], &parser->cur_cmd->resp_err);
 
 			calc_req_total_time(parser->cur_req, time.time_us);
 			end_request(parser);
@@ -867,7 +889,8 @@ int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum)
 			//fill in cur cmd's resp
 			parser->cur_cmd->resp_type = RESP_R3;
 			ept->parse_data(rowFields[COL_DATA], &parser->cur_cmd->resp.r3);
-
+			ept->parse_info(rowFields[COL_INFO], &parser->cur_cmd->resp_err);
+			
 			calc_req_total_time(parser->cur_req, time.time_us);
 			end_request(parser);
 

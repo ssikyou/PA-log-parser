@@ -15,10 +15,12 @@
 static int classify_req(struct mmc_parser *parser, void *arg);
 static int calc_max_delay(struct mmc_parser *parser, void *arg);
 static int calc_cmd_counts(struct mmc_parser *parser, void *arg);
+static int calc_idle_time(struct mmc_parser *parser, void *arg);
 mmc_req_cb cbs[] = {
 	{"classify request to different lists", NULL, classify_req, NULL, NULL},
 	{"calc read/write max latency/busy time", NULL, calc_max_delay, NULL, NULL},
 	{"calc cmd counts", NULL, calc_cmd_counts, NULL, NULL},
+	{"calc request's idle time/interval time of previous request", NULL, calc_idle_time, NULL, NULL},
 };
 
 mmc_req_cb *alloc_req_cb(char *desc, int (* init)(struct mmc_parser *parser, void *arg), 
@@ -87,7 +89,8 @@ static int calc_max_delay(struct mmc_parser *parser, void *arg)
 {
 	int index;
 
-	if (parser->cur_req->cmd && (is_wr_cmd(parser->cur_req->cmd->cmd_index) || is_rd_cmd(parser->cur_req->cmd->cmd_index))) {
+	if (parser->cur_req->cmd && ((parser->has_busy && is_wr_cmd(parser->cur_req->cmd->cmd_index)) || 
+		(parser->has_data && is_rd_cmd(parser->cur_req->cmd->cmd_index)))) {
 		if (parser->cur_req->delay!=NULL) {
 			index = find_maximum(parser->cur_req->delay, parser->cur_req->sectors);
 			parser->cur_req->max_delay = parser->cur_req->delay[index];
@@ -111,6 +114,23 @@ static int calc_cmd_counts(struct mmc_parser *parser, void *arg)
 
 	if (parser->cur_req->stop)
 		parser->stats.cmds_dist[TYPE_12]++;
+
+	return 0;
+}
+
+static int calc_idle_time(struct mmc_parser *parser, void *arg)
+{
+	if (parser->has_busy && parser->has_data) {
+		if (parser->cur_req->sbc) {
+			parser->cur_req->idle_time = parser->cur_req->sbc->time.interval_us;
+		} else if (parser->cur_req->cmd) {
+			parser->cur_req->idle_time = parser->cur_req->cmd->time.interval_us;
+		} else if (parser->cur_req->stop) {
+			parser->cur_req->idle_time = parser->cur_req->stop->time.interval_us;
+		} else {
+			error("calc_idle_time cur req is wrong!\n");
+		}
+	}
 
 	return 0;
 }
@@ -178,6 +198,28 @@ int mmc_cb_init(mmc_parser *parser)
 }
 
 /*======================XLS and Charts Related Functions===========================*/
+xls_sheet_config *alloc_sheet_config()
+{
+	xls_sheet_config *config = calloc(1, sizeof(xls_sheet_config));
+	if (config == NULL) {
+		perror("alloc mmc xls sheet config failed");
+		goto fail;
+	}
+
+	return config;
+
+fail:
+	return NULL;
+}
+
+void destroy_sheet_config(gpointer data)
+{
+	xls_sheet_config *config = data;
+	if (config) {
+		free(config);
+	}
+}
+
 mmc_xls_cb *alloc_xls_cb()
 {
 	mmc_xls_cb *cb = calloc(1, sizeof(mmc_xls_cb));
@@ -205,6 +247,9 @@ void destroy_xls_cb(gpointer data)
 {
 	mmc_xls_cb *cb = data;
 	if (cb) {
+		if (cb->config->sheets)
+			g_slist_free_full(cb->config->sheets, (GDestroyNotify)destroy_sheet_config);
+
 		if (cb->config) {
 			free(cb->config->filename);
 			free(cb->config);
@@ -241,8 +286,55 @@ int mmc_xls_init(mmc_parser *parser, char *csvpath)
 	mmc_xls_init_rw_dist(parser, csvpath, dir_name);
 	mmc_xls_init_cmd_dist(parser, csvpath, dir_name);
 	mmc_xls_init_sc_dist(parser, csvpath, dir_name);
-
+	mmc_xls_init_addr_dist(parser, csvpath, dir_name);
+	mmc_xls_init_idle_dist(parser, csvpath, dir_name);
+	mmc_xls_init_seq_throughput(parser, csvpath, dir_name);
+	
 	return ret;
+}
+
+int create_chart(lxw_workbook *workbook, lxw_worksheet *worksheet, xls_sheet_config *config)
+{
+	//create chart
+    lxw_chart *chart = workbook_add_chart(workbook, config->chart_type);
+    lxw_chart_series *series = chart_add_series(chart, NULL, NULL);
+
+    chart_series_set_categories(series, config->sheet_name, config->x1_area.first_row, config->x1_area.first_col, config->x1_area.last_row, config->x1_area.last_col);
+    chart_series_set_values(series, config->sheet_name, config->y1_area.first_row, config->y1_area.first_col, config->y1_area.last_row, config->y1_area.last_col);
+    chart_series_set_name(series, config->serie_name);
+    chart_series_set_marker_type(series, LXW_CHART_MARKER_CIRCLE);
+    chart_series_set_marker_size(series, 1);
+
+    if (config->serie2_name) {
+    	lxw_chart_series *series2 = chart_add_series(chart, NULL, NULL);
+    	chart_series_set_categories(series2, config->sheet_name, config->x1_area.first_row, config->x1_area.first_col, config->x1_area.last_row, config->x1_area.last_col);
+    	chart_series_set_values(series2, config->sheet_name, config->y2_area.first_row, config->y2_area.first_col, config->y2_area.last_row, config->y2_area.last_col);
+    	chart_series_set_name(series2, config->serie2_name);
+    }
+
+    chart_title_set_name(chart, config->chart_title_name);
+    chart_axis_set_name(chart->x_axis, config->chart_x_name);
+    chart_axis_set_name(chart->y_axis, config->chart_y_name);
+
+	lxw_image_options options = {	.x_offset = 0,
+									.y_offset = 0,
+	                         		.x_scale  = config->chart_x_scale, 
+	                         		.y_scale  = config->chart_y_scale,
+	                         	};
+
+    worksheet_insert_chart_opt(worksheet, config->chart_row, config->chart_col, chart, &options);
+
+    return 0;
+}
+
+void destroy_xls_entry(gpointer data)
+{
+	xls_data_entry *entry = data;
+	if (entry->idx_desc)
+		free(entry->idx_desc);
+	if (entry->val_desc)
+		free(entry->val_desc);
+	free(entry);
 }
 
 int generate_xls(mmc_parser *parser)
@@ -253,19 +345,28 @@ int generate_xls(mmc_parser *parser)
 	for (iterator = xls_list; iterator; iterator = iterator->next) {
 		mmc_xls_cb *xls_cb = (mmc_xls_cb *)iterator->data;
 		
-		lxw_workbook *workbook  = workbook_new(xls_cb->config->filename);
-	    lxw_worksheet *worksheet = workbook_add_worksheet(workbook, NULL);
+		dbg(L_DEBUG, "\ngenerating excel for [%s]\n", xls_cb->desc);
 
-	    //prepare data
-	   	void *data = xls_cb->prep_data(parser, xls_cb->config);
-	    //write data to sheet
-	    xls_cb->write_data(workbook, worksheet, data, xls_cb->config);
-	    //create charts
-	    xls_cb->create_chart(workbook, worksheet, xls_cb->config);
+		lxw_workbook *workbook  = workbook_new(xls_cb->config->filename);
+
+		GSList *sheet_list = xls_cb->config->sheets;
+		GSList *sheet = NULL;
+		//worksheet loop
+		for (sheet = sheet_list; sheet; sheet = sheet->next) {
+			xls_sheet_config *sheet_config = (xls_sheet_config *)sheet->data;
+
+		    lxw_worksheet *worksheet = workbook_add_worksheet(workbook, sheet_config->sheet_name);
+		    //prepare data
+		   	void *data = xls_cb->prep_data(parser, sheet_config);
+		    //write data to sheet
+		    xls_cb->write_data(workbook, worksheet, data, sheet_config);
+		    //create charts
+		    xls_cb->create_chart(workbook, worksheet, sheet_config);
+
+		    xls_cb->release_data(data);
+		}
 
 	    workbook_close(workbook);
-
-	    xls_cb->release_data(data);
 	}
 
 	return 0;

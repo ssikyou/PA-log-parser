@@ -68,6 +68,7 @@ typedef struct mmc_row {
 //Read
 #define TYPE_17		17
 #define TYPE_18		18
+#define TYPE_21		21
 
 //Write
 #define TYPE_23		23
@@ -107,7 +108,7 @@ typedef struct event_parse_template {
 
 #define MAX_CMD_NUM 70
 typedef struct mmc_stats {
-	struct list_head requests_list;
+	GSList *requests_list;
 	GSList *cmd25_list;
 	GSList *cmd18_list;
 
@@ -120,6 +121,10 @@ typedef struct mmc_stats {
 #define RESP_R3  	3
 #define RESP_UND	255
 
+#define ERR_NONE	0
+#define ERR_CRC7	1
+#define ERR_CRC16	2
+
 typedef struct mmc_cmd {
 	unsigned int event_id;
 	unsigned short cmd_index;
@@ -127,6 +132,7 @@ typedef struct mmc_cmd {
 	event_time time;
 
 	unsigned char resp_type;
+	unsigned char resp_err;		//0: no error, 1: crc7 error
 	union {
 		unsigned int r1;
 		unsigned int r1b;
@@ -137,7 +143,6 @@ typedef struct mmc_cmd {
 } mmc_cmd;
 
 typedef struct mmc_request {
-	struct list_head req_node;
 	mmc_cmd *sbc;
 	mmc_cmd *cmd;
 	mmc_cmd *stop;
@@ -150,6 +155,7 @@ typedef struct mmc_request {
 	unsigned int total_time;	//includes delay time
 	unsigned int *delay;		//for wr busy, for rd Nac
 	unsigned int max_delay;
+	unsigned int idle_time;		//idle time from previous request
 } mmc_request;
 
 struct mmc_parser;
@@ -207,6 +213,7 @@ typedef struct mmc_parser {
 mmc_parser *mmc_parser_init(int parse_data, int parse_busy, char *config_file);
 void mmc_parser_destroy(mmc_parser *parser);
 int mmc_row_parse(mmc_parser *parser, const char **rowFields, int fieldsNum);
+int mmc_parser_end(mmc_parser *parser);
 mmc_req_cb *alloc_req_cb(char *desc, int (* init)(struct mmc_parser *parser, void *arg),
 											int (* func)(struct mmc_parser *parser, void *arg),
 											int (* destroy)(struct mmc_parser *parser, void *arg),

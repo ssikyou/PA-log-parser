@@ -17,7 +17,7 @@ typedef struct cmd_dist_data {
 	int total_cmd_counts;
 } cmd_dist_data;
 
-void *prep_data_cmd_dist(mmc_parser *parser, xls_config *config)
+void *prep_data_cmd_dist(mmc_parser *parser, xls_sheet_config *config)
 {
 	int i = 0;
 	int *cmd_counts = parser->stats.cmds_dist;
@@ -28,7 +28,7 @@ void *prep_data_cmd_dist(mmc_parser *parser, xls_config *config)
 	GSList *item = NULL, *iterator = NULL;
 
 	for (i=0; i<MAX_CMD_NUM; i++) {
-		dbg(L_DEBUG, "create new item\n");
+		//dbg(L_DEBUG, "create new item\n");
 		if (cmd_counts[i] != 0) {
 			xls_data_entry *entry = calloc(1, sizeof(xls_data_entry));
 			entry->idx = i;
@@ -56,7 +56,7 @@ void *prep_data_cmd_dist(mmc_parser *parser, xls_config *config)
 	return result;
 }
 
-int write_data_cmd_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_config *config)
+int write_data_cmd_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_sheet_config *config)
 {
 	cmd_dist_data *result = data;
 	GSList *dist_list = result->list;
@@ -114,8 +114,8 @@ int mmc_xls_init_cmd_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 	GKeyFile* gkf = parser->gkf;
 	GError *error;
 
-    if (g_key_file_has_group(gkf, "Command Dist")) {
-    	char *file_name_suffix = g_key_file_get_value(gkf, "Command Dist", "file_name_suffix", &error);
+    if (g_key_file_has_group(gkf, "Command Distribution")) {
+    	char *file_name_suffix = g_key_file_get_value(gkf, "Command Distribution", "file_name_suffix", &error);
     	if (file_name_suffix == NULL) {
     		file_name_suffix = "_cmd_dist";
     	}
@@ -137,22 +137,26 @@ int mmc_xls_init_cmd_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 		//alloc xls callback
 		mmc_xls_cb *cb = alloc_xls_cb();
 		//init
-		cb->desc = "Command Dist";
+		cb->desc = "Command Distribution";
 		cb->prep_data = prep_data_cmd_dist;
 		cb->write_data = write_data_cmd_dist;
 		cb->create_chart = create_chart;
 		cb->release_data = release_data_cmd_dist;
-
 		cb->config->filename = strdup(filename);
-		cb->config->chart_type = LXW_CHART_COLUMN;
-		cb->config->chart_title_name = "Command Distribution";
-		cb->config->serie_name = "Command Dist";
-		cb->config->chart_x_name = "Command Index";
-		cb->config->chart_y_name = "Counts";
-		cb->config->chart_row = lxw_name_to_row("F8");
-		cb->config->chart_col = lxw_name_to_col("F8");
-		cb->config->chart_x_scale = 2;
-		cb->config->chart_y_scale = 2;
+
+		xls_sheet_config *sheet = alloc_sheet_config();
+		cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
+
+		sheet->sheet_name = "sheet1";
+		sheet->chart_type = LXW_CHART_COLUMN;
+		sheet->chart_title_name = "Command Distribution";
+		sheet->serie_name = "Command Dist";
+		sheet->chart_x_name = "Command Index";
+		sheet->chart_y_name = "Counts";
+		sheet->chart_row = lxw_name_to_row("F8");
+		sheet->chart_col = lxw_name_to_col("F8");
+		sheet->chart_x_scale = 2;
+		sheet->chart_y_scale = 2;
 
 		mmc_register_xls_cb(parser, cb);
     }

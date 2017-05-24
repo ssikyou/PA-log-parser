@@ -61,13 +61,13 @@ typedef struct rw_dist_data
 	int max_delay_time;
 } rw_dist_data;
 
-void *prep_data_rw_dist(mmc_parser *parser, xls_config *config, int type)
+void *prep_data_rw_dist(mmc_parser *parser, xls_sheet_config *config)
 {
 	int max_delay_time = 0;
 	int req_counts = 0;
 	mmc_request *req;
 	GSList *req_list = NULL;
-	if (type == 1)
+	if (strcmp(config->sheet_name, "cmd25") == 0)
 		req_list = parser->stats.cmd25_list;
 	else
 		req_list = parser->stats.cmd18_list;
@@ -88,13 +88,13 @@ void *prep_data_rw_dist(mmc_parser *parser, xls_config *config, int type)
 		req = (mmc_request *)iterator->data;
 		int index = req->max_delay/config->x_steps;
 		
-		dbg(L_DEBUG, "index:%d\n", index);
+		//dbg(L_DEBUG, "index:%d\n", index);
 		item = g_slist_find_custom(dist_list, &index, (GCompareFunc)find_int);
 		if (item) {
-			dbg(L_DEBUG, "item exsit\n");
+			//dbg(L_DEBUG, "item exsit\n");
 			((xls_data_entry *)item->data)->val += 1;
 		} else {
-			dbg(L_DEBUG, "create new item\n");
+			//dbg(L_DEBUG, "create new item\n");
 			xls_data_entry *entry = calloc(1, sizeof(xls_data_entry));
 			entry->idx = index;
 			char tmp[20];
@@ -140,17 +140,7 @@ void *prep_data_rw_dist(mmc_parser *parser, xls_config *config, int type)
 	return result;
 }
 
-void *prep_data_w_busy(mmc_parser *parser, xls_config *config)
-{
-	return prep_data_rw_dist(parser, config, 1);	//1->write, 0->read
-}
-
-void *prep_data_r_latency(mmc_parser *parser, xls_config *config)
-{
-	return prep_data_rw_dist(parser, config, 0);	//1->write, 0->read
-}
-
-int write_data_rw_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_config *config)
+int write_data_rw_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_sheet_config *config)
 {
 	rw_dist_data *result = data;
 	GSList *dist_list = result->list;
@@ -219,41 +209,6 @@ int write_data_rw_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *d
  	return 0;
 }
 
-int create_chart(lxw_workbook *workbook, lxw_worksheet *worksheet, xls_config *config)
-{
-	//create chart
-    lxw_chart *chart = workbook_add_chart(workbook, config->chart_type);
-    lxw_chart_series *series = chart_add_series(chart, NULL, NULL);
-
-    chart_series_set_categories(series, "Sheet1", config->x1_area.first_row, config->x1_area.first_col, config->x1_area.last_row, config->x1_area.last_col);
-    chart_series_set_values(series, "Sheet1", config->y1_area.first_row, config->y1_area.first_col, config->y1_area.last_row, config->y1_area.last_col);
-    chart_series_set_name(series, config->serie_name);
-
-    chart_title_set_name(chart, config->chart_title_name);
-    chart_axis_set_name(chart->x_axis, config->chart_x_name);
-    chart_axis_set_name(chart->y_axis, config->chart_y_name);
-
-	lxw_image_options options = {	.x_offset = 0,
-									.y_offset = 0,
-	                         		.x_scale  = config->chart_x_scale, 
-	                         		.y_scale  = config->chart_y_scale,
-	                         	};
-
-    worksheet_insert_chart_opt(worksheet, config->chart_row, config->chart_col, chart, &options);
-
-    return 0;
-}
-
-void destroy_xls_entry(gpointer data)
-{
-	xls_data_entry *entry = data;
-	if (entry->idx_desc)
-		free(entry->idx_desc);
-	if (entry->val_desc)
-		free(entry->val_desc);
-	free(entry);
-}
-
 void release_data_rw_dist(void *data)
 {
 	rw_dist_data *result = data;
@@ -268,12 +223,12 @@ int mmc_xls_init_rw_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 	GKeyFile* gkf = parser->gkf;
 	GError *error;
 
-	if (parser->has_busy && g_key_file_has_group(gkf, "Write Busy Dist")) {
-    	char *file_name_suffix = g_key_file_get_value(gkf, "Write Busy Dist", "file_name_suffix", &error);
+	if ((parser->has_busy || parser->has_data) && g_key_file_has_group(gkf, "Busy/Latency Distribution")) {
+    	char *file_name_suffix = g_key_file_get_value(gkf, "Busy/Latency Distribution", "file_name_suffix", &error);
     	if (file_name_suffix == NULL) {
-    		file_name_suffix = "_w_busy";
+    		file_name_suffix = "_delay_dist";
     	}
-    	int x_steps = g_key_file_get_integer(gkf, "Write Busy Dist", "x_steps", &error);
+    	int x_steps = g_key_file_get_integer(gkf, "Busy/Latency Distribution", "x_steps", &error);
     	if (x_steps == 0) {
     		x_steps = 20;
     	}
@@ -294,72 +249,49 @@ int mmc_xls_init_rw_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 
 		//alloc xls callback
 		mmc_xls_cb *cb = alloc_xls_cb();
-		//init
-		cb->desc = "Write Busy Dist";
-		cb->prep_data = prep_data_w_busy;
+
+		cb->desc = "Busy/Latency Distribution";
+		cb->prep_data = prep_data_rw_dist;
 		cb->write_data = write_data_rw_dist;
 		cb->create_chart = create_chart;
 		cb->release_data = release_data_rw_dist;
-
 		cb->config->filename = strdup(filename);
-		cb->config->x_steps = x_steps;
-		cb->config->chart_type = LXW_CHART_COLUMN;
-		cb->config->chart_title_name = "CMD25 Max Busy Distribution";
-		cb->config->serie_name = "Busy Dist";
-		cb->config->chart_x_name = "Busy Range/us";
-		cb->config->chart_y_name = "Percentage";
-		cb->config->chart_row = lxw_name_to_row("F22");
-		cb->config->chart_col = lxw_name_to_col("F22");
-		cb->config->chart_x_scale = 8;
-		cb->config->chart_y_scale = 4;
 
-		mmc_register_xls_cb(parser, cb);
-    }
+		xls_sheet_config *sheet = NULL;
+		//sheet1
+		if (parser->has_busy) {
+			sheet = alloc_sheet_config();
+			cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
 
-    if (parser->has_data && g_key_file_has_group(gkf, "Read Latency Dist")) {
-    	char *file_name_suffix = g_key_file_get_value(gkf, "Read Latency Dist", "file_name_suffix", &error);
-    	if (file_name_suffix == NULL) {
-    		file_name_suffix = "_r_latency";
-    	}
-    	int x_steps = g_key_file_get_integer(gkf, "Read Latency Dist", "x_steps", &error);
-    	if (x_steps == 0) {
-    		x_steps = 20;
-    	}
-
-    	char filename[256];
-		memset(filename, 0, sizeof(filename));
-		char **tokens = g_strsplit_set(csvpath, "/.", -1);
-		int nums = g_strv_length(tokens);
-		if (dir_name) {
-			strcat(filename, dir_name);
-			strcat(filename, "/");
+			sheet->sheet_name = "cmd25";
+			sheet->x_steps = x_steps;
+			sheet->chart_type = LXW_CHART_COLUMN;
+			sheet->chart_title_name = "CMD25 Max Busy Distribution";
+			sheet->serie_name = "Busy Dist";
+			sheet->chart_x_name = "Busy Range/us";
+			sheet->chart_y_name = "Percentage";
+			sheet->chart_row = lxw_name_to_row("F22");
+			sheet->chart_col = lxw_name_to_col("F22");
+			sheet->chart_x_scale = 8;
+			sheet->chart_y_scale = 4;
 		}
-		strcat(filename, tokens[nums-2]);
-		strcat(filename, file_name_suffix);
-		strcat(filename, ".xlsx");
-		g_strfreev(tokens);
-	    dbg(L_DEBUG, "filename:%s nums:%d\n", filename, nums);
+		//sheet2
+		if (parser->has_data) {
+			sheet = alloc_sheet_config();
+			cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
 
-		//alloc xls callback
-		mmc_xls_cb *cb = alloc_xls_cb();
-		//init
-		cb->desc = "Read Latency Dist";
-		cb->prep_data = prep_data_r_latency;
-		cb->write_data = write_data_rw_dist;
-		cb->create_chart = create_chart;
-		cb->release_data = release_data_rw_dist;
-
-		cb->config->filename = strdup(filename);
-		cb->config->x_steps = x_steps;
-		cb->config->chart_type = LXW_CHART_COLUMN;
-		cb->config->chart_title_name = "CMD18 Max Latency Distribution";
-		cb->config->serie_name = "Latency Dist";
-		cb->config->chart_x_name = "Latency Range/us";
-		cb->config->chart_y_name = "Percentage";
-		cb->config->chart_row = lxw_name_to_row("F22");
-		cb->config->chart_col = lxw_name_to_col("F22");
-		cb->config->chart_x_scale = 8;
-		cb->config->chart_y_scale = 4;
+			sheet->sheet_name = "cmd18";
+			sheet->x_steps = x_steps;
+			sheet->chart_type = LXW_CHART_COLUMN;
+			sheet->chart_title_name = "CMD18 Max Latency Distribution";
+			sheet->serie_name = "Latency Dist";
+			sheet->chart_x_name = "Latency Range/us";
+			sheet->chart_y_name = "Percentage";
+			sheet->chart_row = lxw_name_to_row("F22");
+			sheet->chart_col = lxw_name_to_col("F22");
+			sheet->chart_x_scale = 8;
+			sheet->chart_y_scale = 4;
+		}
 
 		mmc_register_xls_cb(parser, cb);
     }
