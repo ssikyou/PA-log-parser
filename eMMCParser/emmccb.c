@@ -198,6 +198,28 @@ int mmc_cb_init(mmc_parser *parser)
 }
 
 /*======================XLS and Charts Related Functions===========================*/
+xls_sheet_config *alloc_sheet_config()
+{
+	xls_sheet_config *config = calloc(1, sizeof(xls_sheet_config));
+	if (config == NULL) {
+		perror("alloc mmc xls sheet config failed");
+		goto fail;
+	}
+
+	return config;
+
+fail:
+	return NULL;
+}
+
+void destroy_sheet_config(gpointer data)
+{
+	xls_sheet_config *config = data;
+	if (config) {
+		free(config);
+	}
+}
+
 mmc_xls_cb *alloc_xls_cb()
 {
 	mmc_xls_cb *cb = calloc(1, sizeof(mmc_xls_cb));
@@ -225,6 +247,9 @@ void destroy_xls_cb(gpointer data)
 {
 	mmc_xls_cb *cb = data;
 	if (cb) {
+		if (cb->config->sheets)
+			g_slist_free_full(cb->config->sheets, (GDestroyNotify)destroy_sheet_config);
+
 		if (cb->config) {
 			free(cb->config->filename);
 			free(cb->config);
@@ -263,8 +288,53 @@ int mmc_xls_init(mmc_parser *parser, char *csvpath)
 	mmc_xls_init_sc_dist(parser, csvpath, dir_name);
 	mmc_xls_init_addr_dist(parser, csvpath, dir_name);
 	mmc_xls_init_idle_dist(parser, csvpath, dir_name);
-
+	mmc_xls_init_seq_throughput(parser, csvpath, dir_name);
+	
 	return ret;
+}
+
+int create_chart(lxw_workbook *workbook, lxw_worksheet *worksheet, xls_sheet_config *config)
+{
+	//create chart
+    lxw_chart *chart = workbook_add_chart(workbook, config->chart_type);
+    lxw_chart_series *series = chart_add_series(chart, NULL, NULL);
+
+    chart_series_set_categories(series, config->sheet_name, config->x1_area.first_row, config->x1_area.first_col, config->x1_area.last_row, config->x1_area.last_col);
+    chart_series_set_values(series, config->sheet_name, config->y1_area.first_row, config->y1_area.first_col, config->y1_area.last_row, config->y1_area.last_col);
+    chart_series_set_name(series, config->serie_name);
+    chart_series_set_marker_type(series, LXW_CHART_MARKER_CIRCLE);
+    chart_series_set_marker_size(series, 1);
+
+    if (config->serie2_name) {
+    	lxw_chart_series *series2 = chart_add_series(chart, NULL, NULL);
+    	chart_series_set_categories(series2, config->sheet_name, config->x1_area.first_row, config->x1_area.first_col, config->x1_area.last_row, config->x1_area.last_col);
+    	chart_series_set_values(series2, config->sheet_name, config->y2_area.first_row, config->y2_area.first_col, config->y2_area.last_row, config->y2_area.last_col);
+    	chart_series_set_name(series2, config->serie2_name);
+    }
+
+    chart_title_set_name(chart, config->chart_title_name);
+    chart_axis_set_name(chart->x_axis, config->chart_x_name);
+    chart_axis_set_name(chart->y_axis, config->chart_y_name);
+
+	lxw_image_options options = {	.x_offset = 0,
+									.y_offset = 0,
+	                         		.x_scale  = config->chart_x_scale, 
+	                         		.y_scale  = config->chart_y_scale,
+	                         	};
+
+    worksheet_insert_chart_opt(worksheet, config->chart_row, config->chart_col, chart, &options);
+
+    return 0;
+}
+
+void destroy_xls_entry(gpointer data)
+{
+	xls_data_entry *entry = data;
+	if (entry->idx_desc)
+		free(entry->idx_desc);
+	if (entry->val_desc)
+		free(entry->val_desc);
+	free(entry);
 }
 
 int generate_xls(mmc_parser *parser)
@@ -278,18 +348,25 @@ int generate_xls(mmc_parser *parser)
 		dbg(L_DEBUG, "\ngenerating excel for [%s]\n", xls_cb->desc);
 
 		lxw_workbook *workbook  = workbook_new(xls_cb->config->filename);
-	    lxw_worksheet *worksheet = workbook_add_worksheet(workbook, NULL);
 
-	    //prepare data
-	   	void *data = xls_cb->prep_data(parser, xls_cb->config);
-	    //write data to sheet
-	    xls_cb->write_data(workbook, worksheet, data, xls_cb->config);
-	    //create charts
-	    xls_cb->create_chart(workbook, worksheet, xls_cb->config);
+		GSList *sheet_list = xls_cb->config->sheets;
+		GSList *sheet = NULL;
+		//worksheet loop
+		for (sheet = sheet_list; sheet; sheet = sheet->next) {
+			xls_sheet_config *sheet_config = (xls_sheet_config *)sheet->data;
+
+		    lxw_worksheet *worksheet = workbook_add_worksheet(workbook, sheet_config->sheet_name);
+		    //prepare data
+		   	void *data = xls_cb->prep_data(parser, sheet_config);
+		    //write data to sheet
+		    xls_cb->write_data(workbook, worksheet, data, sheet_config);
+		    //create charts
+		    xls_cb->create_chart(workbook, worksheet, sheet_config);
+
+		    xls_cb->release_data(data);
+		}
 
 	    workbook_close(workbook);
-
-	    xls_cb->release_data(data);
 	}
 
 	return 0;

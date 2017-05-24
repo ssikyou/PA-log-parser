@@ -349,6 +349,8 @@ static void calc_req_total_time(mmc_request *req, unsigned int end_time_us)
 int mmc_parser_end(mmc_parser *parser)
 {
 	parser->stats.requests_list = g_slist_reverse(parser->stats.requests_list);
+	parser->stats.cmd25_list = g_slist_reverse(parser->stats.cmd25_list);
+	parser->stats.cmd18_list = g_slist_reverse(parser->stats.cmd18_list);
 	return 0;
 }
 

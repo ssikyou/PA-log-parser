@@ -22,7 +22,7 @@ typedef struct idle_dist_data {
 	int max_idle_time;
 } idle_dist_data;
 
-void *prep_data_idle_dist(mmc_parser *parser, xls_config *config)
+void *prep_data_idle_dist(mmc_parser *parser, xls_sheet_config *config)
 {
 	int max_idle_time = 0;
 	int req_counts = 0;
@@ -83,7 +83,7 @@ void *prep_data_idle_dist(mmc_parser *parser, xls_config *config)
 	return result;
 }
 
-int write_data_idle_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_config *config)
+int write_data_idle_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_sheet_config *config)
 {
 	idle_dist_data *result = data;
 	GSList *dist_list = result->list;
@@ -166,12 +166,12 @@ int mmc_xls_init_idle_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 	GKeyFile* gkf = parser->gkf;
 	GError *error;
 
-    if (parser->has_busy && parser->has_data && g_key_file_has_group(gkf, "Request Idle Dist")) {
-    	char *file_name_suffix = g_key_file_get_value(gkf, "Request Idle Dist", "file_name_suffix", &error);
+    if (parser->has_busy && parser->has_data && g_key_file_has_group(gkf, "Request Idle Distribution")) {
+    	char *file_name_suffix = g_key_file_get_value(gkf, "Request Idle Distribution", "file_name_suffix", &error);
     	if (file_name_suffix == NULL) {
     		file_name_suffix = "_idle_dist";
     	}
-    	int x_steps = g_key_file_get_integer(gkf, "Request Idle Dist", "x_steps", &error);
+    	int x_steps = g_key_file_get_integer(gkf, "Request Idle Distribution", "x_steps", &error);
     	if (x_steps == 0) {
     		x_steps = 20;
     	}
@@ -198,18 +198,22 @@ int mmc_xls_init_idle_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 		cb->write_data = write_data_idle_dist;
 		cb->create_chart = create_chart;
 		cb->release_data = release_data_idle_dist;
-
 		cb->config->filename = strdup(filename);
-		cb->config->x_steps = x_steps;
-		cb->config->chart_type = LXW_CHART_COLUMN;
-		cb->config->chart_title_name = "Request Idle Time Distribution";
-		cb->config->serie_name = "Request Idle Dist";
-		cb->config->chart_x_name = "Idle Time/us";
-		cb->config->chart_y_name = "Percentage";
-		cb->config->chart_row = lxw_name_to_row("F22");
-		cb->config->chart_col = lxw_name_to_col("F22");
-		cb->config->chart_x_scale = 6;
-		cb->config->chart_y_scale = 3;
+
+		xls_sheet_config *sheet = alloc_sheet_config();
+		cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
+
+		sheet->sheet_name = "sheet1";
+		sheet->x_steps = x_steps;
+		sheet->chart_type = LXW_CHART_COLUMN;
+		sheet->chart_title_name = "Request Idle Time Distribution";
+		sheet->serie_name = "Request Idle Dist";
+		sheet->chart_x_name = "Idle Time/us";
+		sheet->chart_y_name = "Percentage";
+		sheet->chart_row = lxw_name_to_row("F22");
+		sheet->chart_col = lxw_name_to_col("F22");
+		sheet->chart_x_scale = 6;
+		sheet->chart_y_scale = 3;
 
 		mmc_register_xls_cb(parser, cb);
     }

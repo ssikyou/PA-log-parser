@@ -29,14 +29,14 @@ gint find_uint(gconstpointer item1, gconstpointer item2) {
 		return -1;
 }
 
-void *prep_data_addr_dist(mmc_parser *parser, xls_config *config, int type)
+void *prep_data_addr_dist(mmc_parser *parser, xls_sheet_config *config)
 {
 	int req_counts = 0;
 	unsigned int address = 0;
 	mmc_request *req;
 	GSList *req_list = NULL;
 
-	if (type == 1)
+	if (strcmp(config->sheet_name, "cmd25") == 0)
 		req_list = parser->stats.cmd25_list;
 	else
 		req_list = parser->stats.cmd18_list;
@@ -81,17 +81,7 @@ void *prep_data_addr_dist(mmc_parser *parser, xls_config *config, int type)
 	return result;
 }
 
-void *prep_data_addr_dist_w(mmc_parser *parser, xls_config *config)
-{
-	return prep_data_addr_dist(parser, config, 1);	//1->write, 0->read
-}
-
-void *prep_data_addr_dist_r(mmc_parser *parser, xls_config *config)
-{
-	return prep_data_addr_dist(parser, config, 0);	//1->write, 0->read
-}
-
-int write_data_addr_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_config *config)
+int write_data_addr_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *data, xls_sheet_config *config)
 {
 	addr_dist_data *result = data;
 	GSList *dist_list = result->list;
@@ -149,10 +139,10 @@ int mmc_xls_init_addr_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 	GKeyFile* gkf = parser->gkf;
 	GError *error;
 
-    if (g_key_file_has_group(gkf, "Write Address Dist")) {
-    	char *file_name_suffix = g_key_file_get_value(gkf, "Write Address Dist", "file_name_suffix", &error);
+    if (g_key_file_has_group(gkf, "Address Distribution")) {
+    	char *file_name_suffix = g_key_file_get_value(gkf, "Address Distribution", "file_name_suffix", &error);
     	if (file_name_suffix == NULL) {
-    		file_name_suffix = "_w_addr";
+    		file_name_suffix = "_addr_dist";
     	}
 
     	char filename[256];
@@ -172,65 +162,42 @@ int mmc_xls_init_addr_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 		//alloc xls callback
 		mmc_xls_cb *cb = alloc_xls_cb();
 		//init
-		cb->desc = "Write Address Dist";
-		cb->prep_data = prep_data_addr_dist_w;
+		cb->desc = "Address Distribution";
+		cb->prep_data = prep_data_addr_dist;
 		cb->write_data = write_data_addr_dist;
 		cb->create_chart = create_chart;
 		cb->release_data = release_data_addr_dist;
-
 		cb->config->filename = strdup(filename);
-		cb->config->chart_type = LXW_CHART_SCATTER;
-		cb->config->chart_title_name = "CMD25 Address Distribution";
-		cb->config->serie_name = "CMD25 Address Dist";
-		cb->config->chart_x_name = "Address";
-		cb->config->chart_y_name = "Percentage";
-		cb->config->chart_row = lxw_name_to_row("F8");
-		cb->config->chart_col = lxw_name_to_col("F8");
-		cb->config->chart_x_scale = 3;
-		cb->config->chart_y_scale = 2;
 
-		mmc_register_xls_cb(parser, cb);
-    }
+		//sheet1
+		xls_sheet_config *sheet = alloc_sheet_config();
+		cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
 
-    if (g_key_file_has_group(gkf, "Read Address Dist")) {
-    	char *file_name_suffix = g_key_file_get_value(gkf, "Read Address Dist", "file_name_suffix", &error);
-    	if (file_name_suffix == NULL) {
-    		file_name_suffix = "_r_addr";
-    	}
+		sheet->sheet_name = "cmd25";
+		sheet->chart_type = LXW_CHART_SCATTER;
+		sheet->chart_title_name = "CMD25 Address Distribution";
+		sheet->serie_name = "CMD25 Address Dist";
+		sheet->chart_x_name = "Address";
+		sheet->chart_y_name = "Percentage";
+		sheet->chart_row = lxw_name_to_row("F8");
+		sheet->chart_col = lxw_name_to_col("F8");
+		sheet->chart_x_scale = 3;
+		sheet->chart_y_scale = 2;
 
-    	char filename[256];
-		memset(filename, 0, sizeof(filename));
-		char **tokens = g_strsplit_set(csvpath, "/.", -1);
-		int nums = g_strv_length(tokens);
-		if (dir_name) {
-			strcat(filename, dir_name);
-			strcat(filename, "/");
-		}
-		strcat(filename, tokens[nums-2]);
-		strcat(filename, file_name_suffix);
-		strcat(filename, ".xlsx");
-		g_strfreev(tokens);
-	    dbg(L_DEBUG, "filename:%s nums:%d\n", filename, nums);
+		//sheet2
+		sheet = alloc_sheet_config();
+		cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
 
-		//alloc xls callback
-		mmc_xls_cb *cb = alloc_xls_cb();
-		//init
-		cb->desc = "Read Address Dist";
-		cb->prep_data = prep_data_addr_dist_r;
-		cb->write_data = write_data_addr_dist;
-		cb->create_chart = create_chart;
-		cb->release_data = release_data_addr_dist;
-
-		cb->config->filename = strdup(filename);
-		cb->config->chart_type = LXW_CHART_SCATTER;
-		cb->config->chart_title_name = "CMD18 Address Distribution";
-		cb->config->serie_name = "CMD18 Address Dist";
-		cb->config->chart_x_name = "Address";
-		cb->config->chart_y_name = "Percentage";
-		cb->config->chart_row = lxw_name_to_row("F8");
-		cb->config->chart_col = lxw_name_to_col("F8");
-		cb->config->chart_x_scale = 3;
-		cb->config->chart_y_scale = 2;
+		sheet->sheet_name = "cmd18";
+		sheet->chart_type = LXW_CHART_SCATTER;
+		sheet->chart_title_name = "CMD18 Address Distribution";
+		sheet->serie_name = "CMD18 Address Dist";
+		sheet->chart_x_name = "Address";
+		sheet->chart_y_name = "Percentage";
+		sheet->chart_row = lxw_name_to_row("F8");
+		sheet->chart_col = lxw_name_to_col("F8");
+		sheet->chart_x_scale = 3;
+		sheet->chart_y_scale = 2;
 
 		mmc_register_xls_cb(parser, cb);
     }
