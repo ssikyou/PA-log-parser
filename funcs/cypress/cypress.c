@@ -14,8 +14,12 @@ typedef struct cypress{
     cypress_cfg *cfg;
 	void *spec;
     int start_value;
+	int exec_cmd0;
 	int exec_cmd1;
     file_info   file;
+    unsigned char host_io;//1,4,8
+    unsigned char data_rate;//0 sdr,1 ddr
+    unsigned int curr_clk;//unit KHz
 }cypress;
 
 static char* get_write_file_path(mmc_request *req, cypress *press, char *path)
@@ -76,41 +80,85 @@ static int cmd_compare_type(mmc_cmd *cmd)
 {
     switch(cmd->cmd_index){
         case 1:
+		case 13:
             return 0;
         default:
             return 2;
     }
 }
 
-static int format_cmd(mmc_cmd *cmd, cypress *press)
+static int filt_illegal(mmc_cmd *cmd, cypress *press)
 {
-    int resp_size = 32, rsp_mask = 0, cmp_type = 0,spec_resp_size = 0;
-    int len = 0;
-    char buf[512];
+    cypress_cfg *cfg = press->cfg;
 
+	if(cfg->filt_illegal){
+		if((press->exec_cmd0 == 1)&&(cmd->cmd_index != 1))
+			return 1;// do not exec class ops
+		else if(cmd->cmd_index == 0){
+			press->exec_cmd0 = 1;
+		}else if(cmd->cmd_index == 1)
+			press->exec_cmd0 = 0;
+	}
+
+	return 0;
+}
+
+static int filt_cmd1(mmc_cmd *cmd, cypress *press)
+{
 	//send two command 1
 	if((press->exec_cmd1 == 2)&&(cmd->cmd_index == 1))
-		return 0;//only two cmd1
-	else if(cmd->cmd_index == 1)
+		return 1;//only two cmd1
+	else if(cmd->cmd_index == 1){
 		press->exec_cmd1++;
-	else
+	}else
 		press->exec_cmd1 = 0;
+
+	return 0;
+}
+
+static int get_rsp_size(mmc_cmd *cmd, int spec_resp_size)
+{
+	int resp_size = 32;
 
     if(cmd->resp_type == RESP_UND)
         resp_size= 0;
     else if(cmd->resp_type == RESP_R2)
         resp_size = 128;
 
-	spec_resp_size = get_cmd_rsp_size(cmd->cmd_index);
 	if(spec_resp_size != resp_size){
 		error("Warn:%s event_id:%d, cmd:%d, resp size:%d, not equal to spec :%d\n", __func__, cmd->event_id, cmd->cmd_index, resp_size, spec_resp_size);
 	}
+	return resp_size;
+}
+
+static int format_cmd(mmc_cmd *cmd, cypress *press)
+{
+    int resp_size = 32, spec_resp_size = 0, rsp_mask = 0, cmp_type = 0;
+    int len = 0;
+    char buf[512];
+	int ret = 0;
+
+	ret = filt_illegal(cmd, press);
+	if(ret)
+		return ret;
+
+	ret = filt_cmd1(cmd, press);
+	if(ret)
+		return ret;
+
+	spec_resp_size = get_cmd_rsp_size(cmd->cmd_index);
+	resp_size = get_rsp_size(cmd, spec_resp_size);
+
     rsp_mask = cmd_rsp_mask(cmd, press);
     cmp_type = cmd_compare_type(cmd);
 
     len += sprintf(buf + len, "CMD%d,Argu=32'h%08x,RespSize=%d",
 			cmd->cmd_index, cmd->arg, spec_resp_size);
+
     if(resp_size == 32){
+		if(cmp_type > 0 && cmd->resp_err == 1)
+			cmp_type = 0;
+
         if(cmp_type > 0){
         len += sprintf(buf + len, ",CompType=%d,Resp=32'h%08x", cmp_type, cmd->resp.r1);
             if(rsp_mask != 0)
@@ -122,14 +170,20 @@ static int format_cmd(mmc_cmd *cmd, cypress *press)
     update_shell_file(&press->file, buf, len);
     return 0;
 }
+static void cypress_set_host(cypress *press)
+{
+	char buf[255];
+	int len = 0;
+
+	len += sprintf(buf + len,"SetHost,CLK=%d,DateRate=%s,IO=%d\n", press->curr_clk, data_rate_str(press->data_rate),press->host_io);
+	update_shell_file(&press->file, buf, len);
+}
 
 static void handle_cmd6(mmc_cmd *cmd, cypress *press)
 {
     cypress_cfg *cfg = press->cfg;
 	unsigned int arg = cmd->arg;
     unsigned char index, value;
-	char buf[255];
-	int len = 0;
 
     index = (arg>>16)&0xff;
     value = (arg>>8)&0xff;
@@ -138,30 +192,41 @@ static void handle_cmd6(mmc_cmd *cmd, cypress *press)
         case 183://b7 bus width,
             switch(value){
                 case 0://1bit data bus
-                    cfg->host_io = HOST_IO_1BIT;
-                    cfg->data_rate = DATA_RATE_SDR;
+                    press->host_io = HOST_IO_1BIT;
+                    press->data_rate = DATA_RATE_SDR;
                     break;
                 case 1://4bit data bus
-                    cfg->host_io = HOST_IO_4BIT;
-                    cfg->data_rate = DATA_RATE_SDR;
+                    press->host_io = HOST_IO_4BIT;
+                    press->data_rate = DATA_RATE_SDR;
                     break;
                 case 2://8bit data bus
-                    cfg->host_io = HOST_IO_8BIT;
-                    cfg->data_rate = DATA_RATE_SDR;
+                    press->host_io = HOST_IO_8BIT;
+                    press->data_rate = DATA_RATE_SDR;
                     break;
                 case 5://4bit ddr
-                    cfg->host_io = HOST_IO_4BIT;
-                    cfg->data_rate = DATA_RATE_DDR;
+                    press->host_io = HOST_IO_4BIT;
+                    press->data_rate = DATA_RATE_DDR;
 					break;
                 case 6://8bit ddr
-                    cfg->host_io = HOST_IO_8BIT;
-                    cfg->data_rate = DATA_RATE_DDR;
+                    press->host_io = HOST_IO_8BIT;
+                    press->data_rate = DATA_RATE_DDR;
 					break;
             }
-			len += sprintf(buf + len,"SetHost,CLK=%d,IO=%d\n", cfg->host_clk, cfg->host_io);
-			update_shell_file(&press->file, buf, len);
+			press->curr_clk = cfg->usr_clk;
+			cypress_set_host(press);
             break;
    }
+}
+
+
+static int wait_ready(cypress *press)
+{
+	char buf[255];
+	int len = 0;
+
+	len = sprintf(buf,"DataWaitReady\n");
+	update_shell_file(&press->file, buf, len);
+	return 0;
 }
 
 static int sbc(void *arg, mmc_cmd *sbc, mmc_val *val)
@@ -173,41 +238,57 @@ static int sbc(void *arg, mmc_cmd *sbc, mmc_val *val)
 static int stop(void *arg, mmc_cmd *stop)
 {
 	cypress *press = (cypress *)arg;
-	return format_cmd(stop, press);
+
+	format_cmd(stop, press);
+	wait_ready(press);
+
+	return 0;
 }
 
-static int wait_ready(char *buf)
-{
-	return sprintf(buf,"DataWaitReady\n");
-}
 
-static int read_data(cypress *press,  mmc_request *req, char *buf)
+static int read_data(cypress *press,  mmc_request *req)
 {
 	cypress_cfg *cfg = press->cfg;
 	char path[255];
+	char buf[255];
+	int len = 0;
 
-	return sprintf(buf,"DataR,IO=%d,DataRate=%s,BlockSize=%d,BlockNum=%d,SourceF=%s\n",
+	len = sprintf(buf,"DataR,IO=%d,DataRate=%s,BlockSize=%d,BlockNum=%d,SourceF=%s\n",
 				 cfg->host_io, data_rate_str(cfg->data_rate),
 				 cfg->block_size, req->sectors, get_read_file_path(req, press, path));
+	update_shell_file(&press->file, buf, len);
+	return len;
 }
 
-static int write_data(cypress *press,  mmc_request *req, char *buf)
+static int write_data(cypress *press,  mmc_request *req)
 {
 	cypress_cfg *cfg = press->cfg;
 	char path[255];
+	char buf[255];
 	int len = 0;
 
     len += sprintf(buf + len,"DataW,IO=%d,DataRate=%s,BlockSize=%d,BlockNum=%d,SourceF=%s\n",
 		 cfg->host_io, data_rate_str(cfg->data_rate),
 		 cfg->block_size, req->sectors, get_write_file_path(req, press, path));
     len += sprintf(buf + len,"DataWaitReady\n");
+	update_shell_file(&press->file, buf, len);
 	return len;
 }
 
-void do_assert(mmc_cmd *cmd)
+static void do_assert(mmc_cmd *cmd)
 {
 	error("%s event_id:%d, cmd->index:%d, not know how to parse now\n", __func__, cmd->event_id, cmd->cmd_index);
 	assert(0);
+}
+
+static int do_sleep(cypress *press, int ms)
+{
+	char buf[255];
+	int len = 0;
+
+	len += sprintf(buf + len,"sleep,time=%d\n",ms);
+	update_shell_file(&press->file, buf, len);
+	return 0;
 }
 
 static int class1(void*arg, mmc_request *req)
@@ -216,18 +297,16 @@ static int class1(void*arg, mmc_request *req)
 	cypress_cfg *cfg = press->cfg;
 	mmc_cmd *cmd = req->cmd;
 	unsigned short index = cmd->cmd_index;
-	char buf[255];
-	int len = 0;
 
 	switch(index){
 		case 0:
-            cfg->host_io = HOST_IO_1BIT;
-            cfg->data_rate = DATA_RATE_SDR;
-			len += sprintf(buf + len,"SetHost,CLK=400,IO=%d\n", cfg->host_io);
+            press->host_io = HOST_IO_1BIT;
+            press->data_rate = DATA_RATE_SDR;
+			press->curr_clk = cfg->init_clk;
+			cypress_set_host(press);
 			break;
         case 1:
-			if(press->exec_cmd1 != 2)
-            	len += sprintf(buf + len,"sleep,time=500\n");
+            do_sleep(press, 500);
             break;
 		case 2:
 		case 3:
@@ -236,11 +315,11 @@ static int class1(void*arg, mmc_request *req)
 			do_assert(cmd);
 			break;
 		case 5:
-			len += wait_ready(buf + len);
+			wait_ready(press);
 			break;
         case 6:
             handle_cmd6(cmd, press);
-			len += wait_ready(buf + len);
+			wait_ready(press);
             break;
 		case 7:
 			break;
@@ -248,29 +327,27 @@ static int class1(void*arg, mmc_request *req)
 			if(req->sectors != 1){
 				error("%s event_id:%d, cmd->index:%d, req->sectors:%d not 1\n", __func__, cmd->event_id, index, req->sectors);
 			}
-			len += read_data(press,  req, buf + len);
+			read_data(press, req);
 			break;
 		case 9://get csd
 		case 10://get cid
 			break;
 		case 12:
 		case 13:
-			len += wait_ready(buf + len);
+			wait_ready(press);
 			break;
 		case 14:
-			len += read_data(press,  req, buf + len);
+			read_data(press, req);
 			break;
 		case 15:
 			break;
 		case 19:
-			len += read_data(press,  req, buf + len);
+			read_data(press, req);
 			break;
 		default:
 			do_assert(cmd);
 	}
 
-	if(len)
-		update_shell_file(&press->file, buf, len);
 	return 0;
 }
 
@@ -280,8 +357,6 @@ static int class2(void*arg, mmc_request *req)
 	cypress_cfg *cfg = press->cfg;
 	mmc_cmd *cmd = req->cmd;
 	unsigned short index = cmd->cmd_index;
-	char buf[255];
-	int len = 0;
 
 	switch(index){
 		case 16:
@@ -290,13 +365,11 @@ static int class2(void*arg, mmc_request *req)
 		case 17:
         case 18:
 		case 21:
-			len += read_data(press,  req, buf + len);
+			read_data(press, req);
 			break;
 		default:
 			do_assert(cmd);
 	}
-	if(len)
-		update_shell_file(&press->file, buf, len);
 	return 0;	
 }
 
@@ -305,8 +378,6 @@ static int class4(void*arg, mmc_request *req)
 	cypress *press = (cypress *)arg;
 	mmc_cmd *cmd = req->cmd;
 	unsigned short index = cmd->cmd_index;
-	char buf[255];
-	int len = 0;
 
 	switch(index){
 		case 23:
@@ -317,13 +388,12 @@ static int class4(void*arg, mmc_request *req)
 		case 26://prg cid
 		case 27://prg csd
 		case 49://prg rtc to card
-			len += write_data(press,  req, buf + len);
+			write_data(press, req);
 			break;
 		default:
 			do_assert(cmd);
 	}
-	if(len)
-		update_shell_file(&press->file, buf, len);
+
 	return 0;	
 }
 
@@ -332,22 +402,18 @@ static int class5(void*arg, mmc_request *req)
 	cypress *press = (cypress *)arg;
 	mmc_cmd *cmd = req->cmd;
 	unsigned short index = cmd->cmd_index;
-	char buf[255];
-	int len = 0;
 
 	switch(index){
 		case 35:
 		case 36:
 			break;
 		case 38:
-			len += wait_ready(buf + len);
+			wait_ready(press);
 			break;
 		default:
 			do_assert(cmd);
 	}
 
-	if(len)
-		update_shell_file(&press->file, buf, len);
 	return 0;
 }
 
@@ -356,20 +422,16 @@ static int class6(void*arg, mmc_request *req)
 	cypress *press = (cypress *)arg;
 	mmc_cmd *cmd = req->cmd;
 	unsigned short index = cmd->cmd_index;
-	char buf[255];
-	int len = 0;
 
 	switch(index){
 		case 28:
 		case 29:
-			len += wait_ready(buf + len);
+			wait_ready(press);
 			break;
 		default:
 			do_assert(cmd);
 	}
 
-	if(len)
-		update_shell_file(&press->file, buf, len);
 	return 0;
 }
 
@@ -378,18 +440,15 @@ static int class11(void*arg, mmc_request *req)
 	cypress *press = (cypress *)arg;
 	mmc_cmd *cmd = req->cmd;
 	unsigned short index = cmd->cmd_index;
-	char buf[255];
-	int len = 0;
 	
 	switch(index){
 		case 48:
-			len += wait_ready(buf + len);
+			wait_ready(press);
 			break;
 		default:
 			do_assert(req->cmd);
 	}
-	if(len)
-		update_shell_file(&press->file, buf, len);
+
 	return 0;
 }
 
@@ -398,15 +457,11 @@ static int vendor(void*arg, mmc_request *req)
 	//cypress *press = (cypress *)arg;
 	mmc_cmd *cmd = req->cmd;
 	unsigned short index = cmd->cmd_index;
-	//char buf[255];
-	//int len = 0;
 
 	switch(index){
 		default:
 			do_assert(req->cmd);
 	}
-	//if(len)
-	//	update_shell_file(&press->file, buf, len);
 	return 0;
 }
 
@@ -416,12 +471,11 @@ static int undefine(void*arg, mmc_request *req)
 	return 0;
 }
 
-static int common(void*arg, mmc_request *req)
+static int pre(void*arg, mmc_request *req)
 {
 	cypress *press = (cypress *)arg;
 
-	format_cmd(req->cmd, press);
-	return 0;
+	return format_cmd(req->cmd, press);
 }
 
 static int def(void*arg, mmc_request *req)
@@ -492,6 +546,7 @@ static int handle_large_request(cypress *press, mmc_request *req)
 
 
 static class_ops ops = {
+	.pre = &pre,//this is the first command for exec.
 	.class1 = &class1,
 	.class2 = &class2,
 	.class4 = &class4,
@@ -500,7 +555,7 @@ static class_ops ops = {
 	.class11 = &class11,
 	.vendor = &vendor,
 	.undefine = &undefine,
-	.common = &common,//this is the first command for exec.
+
 };
 
 int cypress_init(func* func, func_param *param)
@@ -515,6 +570,15 @@ int cypress_init(func* func, func_param *param)
 		error("%s init fail\n", __func__);
         return ret;
     }
+
+    press->host_io = press->cfg->host_io;
+    press->data_rate = press->cfg->data_rate;
+	//press->curr_state = cfg->def_state;
+	if(press->cfg->curr_state < STATE_TRAN)
+    	press->curr_clk = press->cfg->init_clk;
+	else
+		press->curr_clk = press->cfg->usr_clk;
+
 	press->spec = mmc_spec_init((void *)press, &ops, &sbc, &stop, &def);
 	if(press->spec == NULL){
         free(press);
@@ -530,6 +594,7 @@ int cypress_init(func* func, func_param *param)
     }
 
 	press->exec_cmd1 = 0;
+	press->exec_cmd0 = 0;
     func->priv = (void*)press;
     return ret;
 }

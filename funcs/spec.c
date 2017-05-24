@@ -114,22 +114,26 @@ static int undefine(void*arg, mmc_request *req)
 void* mmc_spec_init(void *arg, class_ops *ops, sbc_callbak *sbc, stop_callbak *stop, class_callbak *def)
 {
 	int i;
-
+	callbak *callbak;
 	if(ops == NULL){
 		error("%s ops is NULL\n", __func__);
 		return NULL;
 	}
 	mmc_spec *spec = malloc(sizeof(mmc_spec));
-	spec->callbak.ops = ops;
+
+	callbak = &spec->callbak;
+	callbak->ops = ops;
 	if(def != NULL){
-		for(i = 0; i < 12; i++){
-			if(spec->callbak.call[i] == NULL)
-				spec->callbak.call[i] = def;
+		for(i = 1; i < 12; i++){
+			if(callbak->call[i] == NULL)
+				callbak->call[i] = def;
 		}
 
 	}
-	if(spec->callbak.call[12])
-		spec->callbak.call[i] = undefine;//set default undefine ops
+	if(callbak->ops->vendor == NULL)
+		callbak->ops->vendor = undefine;
+	if(callbak->ops->undefine == NULL)
+		callbak->ops->undefine = undefine;
 
 	spec->sbc = sbc;
 	spec->stop = stop;
@@ -197,60 +201,63 @@ int handle_class_ops(void *arg, mmc_request *req)
 		return -1;
 	}
 
-	if(callbak->ops->common){
-		ret = callbak->ops->common(spec->priv, req);
+	if(callbak->ops->pre){
+		ret = callbak->ops->pre(spec->priv, req);
 		if(ret){
-			error("%s ops->common fail\n", __func__);
-			return -1;
+			if(ret == -1)			
+				error("%s do pre ops fail\n", __func__);
+			return ret;
 		}
 	}
 	if((index >= 0 && index <= 15) || (index == 19)){
-		i = 0;//class0_1
+		i = 1;//class0_1
 	}else if((index >= 16 && index <= 18) || (index == 21)){
-		i = 1;//class2
+		i = 2;//class2
 	}else if(index == 20){
-		i = 2;//class3
+		i = 3;//class3
 	}else if((index >= 23 && index <= 27) || (index == 49)){
-		i = 3;//class4
+		i = 4;//class4
 	}else if((index >= 35 && index <= 36) || (index == 38)){
-		i = 4;//class5
+		i = 5;//class5
 	}else if(index >= 28 && index <= 31){
-		i = 5;//class6
+		i = 6;//class6
 	}else if(index == 42){
-		i = 6;//class7
+		i = 7;//class7
 	}else if((index >= 55 && index <= 56)){
-		i = 7;//class8
+		i = 8;//class8
 	}else if(index >= 39 && index <= 40){
-		i = 8;//class9
+		i = 9;//class9
 	}else if(index == 53 && index == 54){
-		i = 9;//class10
+		i = 10;//class10
 	}else if(index >= 44 && index <= 48){
-		i = 10;//class11
+		i = 11;//class11
 	}else if((index == 22)//class3 reserved
 			|| (index >= 32 && index <= 34)|| (index == 37)//class5 reserved
 			||(index == 43)//class7 reserved
 			|| (index >= 57 && index <= 59)//class8 reserved
 			||(index == 41)//class9 reserved
 			|| (index >= 50 && index <= 52)){//class10 reserved
-		i = 11;
-	}else if(index >= 60 && index <= 63)//class8 vendor
-		i = 12;
+		i = 12;	//reserved
+	}else if(index >= 60 && index <= 63)
+		i = 13;//class8 vendor
 	else{
 		error("%s event_id:%d index is:%d\n", __func__, cmd->event_id, index);
 		assert(0);
 	}
 
-	if(spec->callbak.call[i])
-		spec->callbak.call[i](spec->priv, req);
-	
-/*
-	if(i >= 0 && i <= 10)
-		CALL_CLASS_CALLBAK(i, spec->priv, req);
-	else if(i == 11)
-		CALL_UND_CALLBAK(i, spec->priv, req);
-	else
-		CALL_VND_CALLBAK(i, spec->priv, req);
-*/
+	if(spec->callbak.call[i]){
+		ret = spec->callbak.call[i](spec->priv, req);
+		if(ret == -1){
+			error("%s do class ops fail\n", __func__);
+			return ret;
+		}
+	}
+	if(callbak->ops->post){
+		ret = callbak->ops->post(spec->priv, req);
+		if(ret == -1)			
+			error("%s do post ops fail\n", __func__);
+	}
+
 	return ret;
 }
 

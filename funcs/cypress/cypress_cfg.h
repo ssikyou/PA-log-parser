@@ -23,9 +23,12 @@ typedef struct cypress_cfg{
 	int max_sectors;// >0 use max_sectors
     unsigned char host_io;//1,4,8
     unsigned char data_rate;//0 sdr,1 ddr
-    unsigned int host_clk;//unit KHz
+    unsigned int init_clk;//unit KHz, init clock
+    unsigned int usr_clk;//unit KHz user mode clock
 	int self_div;
 	int comp_mask;
+	unsigned char curr_state;//current states for script
+	int filt_illegal;
 }cypress_cfg;
 
 const char *data_rate_str(unsigned char data_rate);

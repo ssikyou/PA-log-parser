@@ -6,6 +6,23 @@
 //class is reference to spec table49 ~table59
 //vendor is seprate from class8
 
+//0 idle, 1 ready, 2 ident, 3 stby, 4 tran, 5 data, 6 btst, 7 rcv, 8 prg, 9 dis, 10 ina, 11 slp, 12 irq
+enum mmc_state{
+	STATE_IDLE = 0,
+	STATE_READY,
+	STATE_IDENT,
+	STATE_STBY,
+	STATE_TRAN,
+	STATE_DATA,
+	STATE_BTST,
+	STATE_RCV,
+	STATE_PRG,
+	STATE_DIS,
+	STATE_INA,
+	STATE_SLP,
+	STATE_IRQ,
+};
+
 typedef struct mmc_val{
 	int reliable_wr:1;
 	int force_prg:1;
@@ -22,9 +39,12 @@ typedef int (stop_callbak)(void *arg, mmc_cmd *stop);
 #define CLASS_DEF(x)	CLASS_OPS(class##x)
 #define CLASS_VND()     CLASS_OPS(vendor)
 #define CLASS_UDF()     CLASS_OPS(undefine)
-#define CLASS_COM()     CLASS_OPS(common)
+
+#define CLASS_PRE()		CLASS_OPS(pre)
+#define CLASS_POST()    CLASS_OPS(post)
 
 typedef struct class_ops{
+	CLASS_PRE();//call it before all class ops return value: 0 OK, 1 OK but no need do class ops, -1 not OK
 	CLASS_DEF(1);//class0_1
 	CLASS_DEF(2);//class2
 	CLASS_DEF(3);//class3
@@ -36,9 +56,9 @@ typedef struct class_ops{
 	CLASS_DEF(9);//class9
 	CLASS_DEF(10);//class10
 	CLASS_DEF(11);//class11
-	CLASS_VND();//vendor cmd, devided from class 8
 	CLASS_UDF();//undefined// all undefined or reserved cmd
-	CLASS_COM();//common command, exec before all class func.
+	CLASS_VND();//vendor cmd, devided from class 8
+	CLASS_POST();//call it at laster
 }class_ops;
 
 int is_cmd_rsp_r1(unsigned short cmd_index);

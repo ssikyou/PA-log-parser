@@ -5,18 +5,22 @@
 #include "func.h"
 #include "config.h"
 #include "cypress_cfg.h"
+#include "spec.h"
 static config_list list[]={
-    {.type = CFG_INT, .key = "pattern_type"},
-    {.type = CFG_STR, .key = "pattern_data"},
-    {.type = CFG_INT, .key = "pattern_len"},
-    {.type = CFG_INT, .key = "start_value"},
-    {.type = CFG_INT, .key = "block_size"},
-	{.type = CFG_INT, .key = "max_sectors"},
-    {.type = CFG_INT, .key = "host_io"},
-    {.type = CFG_INT, .key = "data_rate"},
-    {.type = CFG_INT, .key = "host_clk"},
-	{.type = CFG_INT, .key = "self_div"},
-	{.type = CFG_INT, .key = "comp_mask"},
+    {.type = CFG_INT, .key = "pattern_type"},//0
+    {.type = CFG_STR, .key = "pattern_data"},//1
+    {.type = CFG_INT, .key = "pattern_len"},//2
+    {.type = CFG_INT, .key = "start_value"},//3
+    {.type = CFG_INT, .key = "block_size"},//4
+	{.type = CFG_INT, .key = "max_sectors"},//5
+    {.type = CFG_INT, .key = "host_io"},//6
+    {.type = CFG_INT, .key = "data_rate"},//7
+    {.type = CFG_INT, .key = "init_clk"},//8
+    {.type = CFG_INT, .key = "usr_clk"},//9
+	{.type = CFG_INT, .key = "self_div"},//10
+	{.type = CFG_INT, .key = "comp_mask"},//11
+	{.type = CFG_INT, .key = "curr_state"},//12
+	{.type = CFG_INT, .key = "filt_illegal"},
 };
 
 
@@ -69,9 +73,12 @@ int cypress_load_configs(mmc_parser *parser, func_param *param)
 	cfg->max_sectors = list[5].val_int;
     cfg->host_io = list[6].val_int;
     cfg->data_rate = list[7].val_int;
-    cfg->host_clk = list[8].val_int;
-	cfg->self_div = list[9].val_int;
-	cfg->comp_mask = list[10].val_int;
+    cfg->init_clk = list[8].val_int;
+    cfg->usr_clk = list[9].val_int;
+	cfg->self_div = list[10].val_int;
+	cfg->comp_mask = list[11].val_int;
+	cfg->curr_state = list[12].val_int;
+	cfg->filt_illegal = list[13].val_int;
 
 	param->cfg = (void *)cfg;
 	if((cfg->self_div == 0 )&&(cfg->max_sectors > 0))
@@ -117,8 +124,18 @@ int cypress_config_init(cypress_cfg *cfg, int has_data)
         return -1;
     }
 
-    if((cfg->host_clk >50000)||(cfg->host_clk < 400)){
-        error("ERR: %s host_clk(%d) out of range for cypress\n", __func__, cfg->host_clk);
+    if((cfg->init_clk < 400)||(cfg->init_clk > 50000)){
+        error("ERR: %s init clk(%d) out of range for cypress\n", __func__, cfg->init_clk);
+        return -1;
+    }
+
+    if((cfg->usr_clk < 400)||(cfg->usr_clk > 50000)){
+        error("ERR: %s user partation clk(%d) out of range for cypress\n", __func__, cfg->usr_clk);
+        return -1;
+    }
+
+    if((cfg->curr_state < STATE_IDLE)||(cfg->curr_state > STATE_IRQ)){
+        error("ERR: %s transfer clk(%d) out of range for cypress\n", __func__, cfg->curr_state);
         return -1;
     }
     //pattern_type 0 random data, 1 user pattern, 2 int increase, 3 int decrease ,4 from log data
