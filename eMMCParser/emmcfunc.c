@@ -22,6 +22,7 @@ int parse_rw_data(void *data, void *out);
 int parse_wr_busy(void *data, unsigned int *out);
 int parse_rd_waittime(void *data, unsigned int *out);
 int parse_resp_r2(void *data, unsigned int *out);
+int parse_resp_info(void *data, unsigned char *out);
 
 event_parse_template events[] = {
 	{TYPE_0, " CMD00(GO_PRE_IDLE_STATE)", parse_cmd_args, NULL, NULL, NULL},
@@ -42,6 +43,7 @@ event_parse_template events[] = {
 	{TYPE_16, " CMD16(SET_BLOCK_LEN)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_17, " CMD17(READ_SINGLE_BLOCK)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_18, " CMD18(READ_MULTIPLE_BLOCK)", parse_cmd_args, parse_cmd_sc, NULL, NULL},
+	{TYPE_21, " CMD21(SEND_TUNING_BLOCK)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_23, " CMD23(SET_BLOCK_COUNT)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_24, " CMD24(WRITE_SINGLE_BLOCK)", parse_cmd_args, NULL, NULL, NULL},
 	{TYPE_25, " CMD25(WRITE_MULTIPLE_BLOCK)", parse_cmd_args, parse_cmd_sc, NULL, NULL},
@@ -52,10 +54,10 @@ event_parse_template events[] = {
 
 	{TYPE_55, " CMD55(APP_CMD)", parse_cmd_args, NULL, NULL, NULL},
 
-	{TYPE_R1, "  R1 ", parse_resp_r1, NULL, NULL, NULL},
-	{TYPE_R1B, "  R1b", parse_resp_r1, NULL, NULL, NULL},
-	{TYPE_R2, "  R2 ", parse_resp_r2, NULL, NULL, NULL},
-	{TYPE_R3, "  R3 ", parse_resp_r1, NULL, NULL, NULL},
+	{TYPE_R1, "  R1 ", parse_resp_r1, parse_resp_info, NULL, NULL},
+	{TYPE_R1B, "  R1b", parse_resp_r1, parse_resp_info, NULL, NULL},
+	{TYPE_R2, "  R2 ", parse_resp_r2, parse_resp_info, NULL, NULL},
+	{TYPE_R3, "  R3 ", parse_resp_r1, parse_resp_info, NULL, NULL},
 	{TYPE_WR, "   Write", parse_rw_data, NULL, NULL, NULL},
 	{TYPE_BUSY_START, "    BUSY START", NULL, NULL, NULL, NULL},
 	{TYPE_BUSY_END, "    BUSY END", NULL, parse_wr_busy, NULL, NULL},
@@ -132,6 +134,23 @@ int parse_resp_r2(void *data, unsigned int *out)
 	dbg(L_DEBUG, "R2(msb->lsb), value:0x%x %x %x %x\n", r2[3], r2[2], r2[1], r2[0]);
 
 	memcpy(out, r2, 4*sizeof(int));
+
+	return 0;
+}
+
+int parse_resp_info(void *data, unsigned char *out)
+{
+	char tmp[50];
+	memset(tmp, '\0', 50);
+	char *str = tmp;
+	memcpy(str, data, strlen((char *)data));
+
+	*out = ERR_NONE;
+	char *ret = strstr(str, "CRC7 ERROR");
+	if (ret) {
+		dbg(L_DEBUG, "find CRC7 ERROR\n");
+		*out = ERR_CRC7;
+	}
 
 	return 0;
 }

@@ -68,6 +68,7 @@ typedef struct mmc_row {
 //Read
 #define TYPE_17		17
 #define TYPE_18		18
+#define TYPE_21		21
 
 //Write
 #define TYPE_23		23
@@ -120,6 +121,10 @@ typedef struct mmc_stats {
 #define RESP_R3  	3
 #define RESP_UND	255
 
+#define ERR_NONE	0
+#define ERR_CRC7	1
+#define ERR_CRC16	2
+
 typedef struct mmc_cmd {
 	unsigned int event_id;
 	unsigned short cmd_index;
@@ -127,6 +132,7 @@ typedef struct mmc_cmd {
 	event_time time;
 
 	unsigned char resp_type;
+	unsigned char resp_err;		//0: no error, 1: crc7 error
 	union {
 		unsigned int r1;
 		unsigned int r1b;
