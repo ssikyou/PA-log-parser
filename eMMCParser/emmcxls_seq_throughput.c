@@ -31,8 +31,12 @@ void *prep_data_seq_throughput(mmc_parser *parser, xls_sheet_config *config)
 
 	if (strcmp(config->sheet_name, "cmd25") == 0)
 		req_list = parser->stats.cmd25_list;
-	else
+	else if (strcmp(config->sheet_name, "cmd18") == 0)
 		req_list = parser->stats.cmd18_list;
+	else if (strcmp(config->sheet_name, "cmd24") == 0)
+		req_list = parser->stats.cmd24_list;
+	else if (strcmp(config->sheet_name, "cmd17") == 0)
+		req_list = parser->stats.cmd17_list;
 
 	seq_throughput_data *result = calloc(1, sizeof(seq_throughput_data));
 	GSList *dist_list = NULL;
@@ -176,7 +180,7 @@ int mmc_xls_init_seq_throughput(mmc_parser *parser, char *csvpath, char *dir_nam
 			cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
 
 			sheet->sheet_name = "cmd25";
-			sheet->chart_type = LXW_CHART_COLUMN;
+			sheet->chart_type = LXW_CHART_LINE;
 			sheet->chart_title_name = "CMD25 Throughput";
 			sheet->serie_name = "Max Busy Time";
 			sheet->serie2_name = "Time per Sector";
@@ -193,7 +197,7 @@ int mmc_xls_init_seq_throughput(mmc_parser *parser, char *csvpath, char *dir_nam
 			cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
 
 			sheet->sheet_name = "cmd18";
-			sheet->chart_type = LXW_CHART_COLUMN;
+			sheet->chart_type = LXW_CHART_LINE;
 			sheet->chart_title_name = "CMD18 Throughput";
 			sheet->serie_name = "Max Latency Time";
 			sheet->serie2_name = "Time per Sector";
@@ -203,6 +207,40 @@ int mmc_xls_init_seq_throughput(mmc_parser *parser, char *csvpath, char *dir_nam
 			sheet->chart_col = lxw_name_to_col("F8");
 			sheet->chart_x_scale = 8;
 			sheet->chart_y_scale = 4;
+		}
+
+		if (parser->has_busy) {
+			xls_sheet_config *sheet = alloc_sheet_config();
+			cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
+
+			sheet->sheet_name = "cmd24";
+			sheet->chart_type = LXW_CHART_LINE;
+			sheet->chart_title_name = "CMD24 Throughput";
+			sheet->serie_name = "Max Busy Time";
+			sheet->serie2_name = "Time per Sector";
+			sheet->chart_x_name = "Command Event ID";
+			sheet->chart_y_name = "Busy Time or Time per Sector";
+			sheet->chart_row = lxw_name_to_row("F8");
+			sheet->chart_col = lxw_name_to_col("F8");
+			sheet->chart_x_scale = 6;
+			sheet->chart_y_scale = 3;
+		}
+
+		if (parser->has_data) {
+			xls_sheet_config *sheet = alloc_sheet_config();
+			cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
+
+			sheet->sheet_name = "cmd17";
+			sheet->chart_type = LXW_CHART_LINE;
+			sheet->chart_title_name = "CMD17 Throughput";
+			sheet->serie_name = "Max Latency Time";
+			sheet->serie2_name = "Time per Sector";
+			sheet->chart_x_name = "Command Event ID";
+			sheet->chart_y_name = "Latency Time or Time per Sector";
+			sheet->chart_row = lxw_name_to_row("F8");
+			sheet->chart_col = lxw_name_to_col("F8");
+			sheet->chart_x_scale = 6;
+			sheet->chart_y_scale = 3;
 		}
 
 		mmc_register_xls_cb(parser, cb);

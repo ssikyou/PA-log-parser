@@ -63,7 +63,9 @@ typedef struct mmc_row {
 #define TYPE_10		10
 #define TYPE_12		12
 #define TYPE_13		13
+#define TYPE_14		14
 #define TYPE_16		16
+#define TYPE_19		19
 
 //Read
 #define TYPE_17		17
@@ -111,6 +113,9 @@ typedef struct mmc_stats {
 	GSList *requests_list;
 	GSList *cmd25_list;
 	GSList *cmd18_list;
+	GSList *cmd24_list;
+	GSList *cmd17_list;
+	GSList *cmd6_list;
 
 	int cmds_dist[MAX_CMD_NUM];	//for cmd distribution, 0~63 for normal cmds, 64~69 for alternative cmds
 } mmc_stats;
