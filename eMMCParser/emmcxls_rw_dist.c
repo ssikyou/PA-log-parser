@@ -69,8 +69,14 @@ void *prep_data_rw_dist(mmc_parser *parser, xls_sheet_config *config)
 	GSList *req_list = NULL;
 	if (strcmp(config->sheet_name, "cmd25") == 0)
 		req_list = parser->stats.cmd25_list;
-	else
+	else if (strcmp(config->sheet_name, "cmd18") == 0)
 		req_list = parser->stats.cmd18_list;
+	else if (strcmp(config->sheet_name, "cmd24") == 0)
+		req_list = parser->stats.cmd24_list;
+	else if (strcmp(config->sheet_name, "cmd17") == 0)
+		req_list = parser->stats.cmd17_list;
+	else if (strcmp(config->sheet_name, "cmd6") == 0)
+		req_list = parser->stats.cmd6_list;
 
 	rw_dist_data *result = calloc(1, sizeof(rw_dist_data));
 	GSList *dist_list = NULL;
@@ -201,10 +207,12 @@ int write_data_rw_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *d
   		col = start_col;
  	}
 
- 	char tmp[16];
-	memset(tmp, 0, sizeof(tmp));
-	snprintf(tmp, sizeof(tmp), "=SUM(J2:J%d)", row);
- 	worksheet_write_formula(worksheet, row, lxw_name_to_col("J"), tmp, NULL);
+ 	if (dist_list!=NULL) {
+	 	char tmp[16];
+		memset(tmp, 0, sizeof(tmp));
+		snprintf(tmp, sizeof(tmp), "=SUM(J2:J%d)", row);
+	 	worksheet_write_formula(worksheet, row, lxw_name_to_col("J"), tmp, NULL);
+ 	}
 
  	return 0;
 }
@@ -291,6 +299,57 @@ int mmc_xls_init_rw_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 			sheet->chart_col = lxw_name_to_col("F22");
 			sheet->chart_x_scale = 8;
 			sheet->chart_y_scale = 4;
+		}
+
+		if (parser->has_busy) {
+			sheet = alloc_sheet_config();
+			cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
+
+			sheet->sheet_name = "cmd24";
+			sheet->x_steps = x_steps;
+			sheet->chart_type = LXW_CHART_COLUMN;
+			sheet->chart_title_name = "CMD24 Max Busy Distribution";
+			sheet->serie_name = "Busy Dist";
+			sheet->chart_x_name = "Busy Range/us";
+			sheet->chart_y_name = "Percentage";
+			sheet->chart_row = lxw_name_to_row("F22");
+			sheet->chart_col = lxw_name_to_col("F22");
+			sheet->chart_x_scale = 2;
+			sheet->chart_y_scale = 2;
+		}
+
+		if (parser->has_data) {
+			sheet = alloc_sheet_config();
+			cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
+
+			sheet->sheet_name = "cmd17";
+			sheet->x_steps = x_steps;
+			sheet->chart_type = LXW_CHART_COLUMN;
+			sheet->chart_title_name = "CMD17 Max Latency Distribution";
+			sheet->serie_name = "Latency Dist";
+			sheet->chart_x_name = "Latency Range/us";
+			sheet->chart_y_name = "Percentage";
+			sheet->chart_row = lxw_name_to_row("F22");
+			sheet->chart_col = lxw_name_to_col("F22");
+			sheet->chart_x_scale = 2;
+			sheet->chart_y_scale = 2;
+		}
+
+		if (parser->has_busy) {
+			sheet = alloc_sheet_config();
+			cb->config->sheets = g_slist_append(cb->config->sheets, sheet);
+
+			sheet->sheet_name = "cmd6";
+			sheet->x_steps = x_steps;
+			sheet->chart_type = LXW_CHART_COLUMN;
+			sheet->chart_title_name = "CMD6 Max Busy Distribution";
+			sheet->serie_name = "Busy Dist";
+			sheet->chart_x_name = "Busy Range/us";
+			sheet->chart_y_name = "Percentage";
+			sheet->chart_row = lxw_name_to_row("F22");
+			sheet->chart_col = lxw_name_to_col("F22");
+			sheet->chart_x_scale = 2;
+			sheet->chart_y_scale = 2;
 		}
 
 		mmc_register_xls_cb(parser, cb);

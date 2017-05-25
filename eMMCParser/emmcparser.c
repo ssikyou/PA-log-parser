@@ -165,14 +165,6 @@ mmc_parser *mmc_parser_init(int has_data, int has_busy, char *config_file)
     // }
     //error("g_log_file: %d\n", g_log_fd);
 
-    parser->pending_list = NULL;
-	parser->stats.requests_list = NULL;
-	parser->stats.cmd25_list = NULL;
-	parser->stats.cmd18_list = NULL;
-
-	parser->req_cb_list = NULL;
-	parser->xls_list = NULL;
-
 	parser->has_data = has_data;
 	parser->has_busy = has_busy;
 
@@ -201,6 +193,15 @@ void mmc_parser_destroy(mmc_parser *parser)
 
 	if (parser->stats.cmd18_list)
 		g_slist_free(parser->stats.cmd18_list);
+
+	if (parser->stats.cmd24_list)
+		g_slist_free(parser->stats.cmd24_list);
+
+	if (parser->stats.cmd17_list)
+		g_slist_free(parser->stats.cmd17_list);
+
+	if (parser->stats.cmd6_list)
+		g_slist_free(parser->stats.cmd6_list);
 
 	if (parser->xls_list)
 		mmc_destroy_xls_list(parser->xls_list);
@@ -351,6 +352,9 @@ int mmc_parser_end(mmc_parser *parser)
 	parser->stats.requests_list = g_slist_reverse(parser->stats.requests_list);
 	parser->stats.cmd25_list = g_slist_reverse(parser->stats.cmd25_list);
 	parser->stats.cmd18_list = g_slist_reverse(parser->stats.cmd18_list);
+	parser->stats.cmd24_list = g_slist_reverse(parser->stats.cmd24_list);
+	parser->stats.cmd17_list = g_slist_reverse(parser->stats.cmd17_list);
+	parser->stats.cmd6_list = g_slist_reverse(parser->stats.cmd6_list);
 	return 0;
 }
 

@@ -80,6 +80,18 @@ static int classify_req(struct mmc_parser *parser, void *arg)
 				//O(1), do we need to reverse the list?
 				parser->stats.cmd25_list = g_slist_prepend(parser->stats.cmd25_list, parser->cur_req);
 			break;
+
+			case TYPE_24:
+				parser->stats.cmd24_list = g_slist_prepend(parser->stats.cmd24_list, parser->cur_req);
+			break;
+
+			case TYPE_17:
+				parser->stats.cmd17_list = g_slist_prepend(parser->stats.cmd17_list, parser->cur_req);
+			break;
+
+			case TYPE_6:
+				parser->stats.cmd6_list = g_slist_prepend(parser->stats.cmd6_list, parser->cur_req);
+			break;
 		}
 	}
 	return 0;
@@ -89,13 +101,18 @@ static int calc_max_delay(struct mmc_parser *parser, void *arg)
 {
 	int index;
 
-	if (parser->cur_req->cmd && ((parser->has_busy && is_wr_cmd(parser->cur_req->cmd->cmd_index)) || 
-		(parser->has_data && is_rd_cmd(parser->cur_req->cmd->cmd_index)))) {
-		if (parser->cur_req->delay!=NULL) {
+	if (parser->cur_req->cmd && parser->cur_req->delay!=NULL) {
+		if ((parser->has_busy && is_wr_cmd(parser->cur_req->cmd->cmd_index)) || 
+			(parser->has_data && is_rd_cmd(parser->cur_req->cmd->cmd_index))) {
+
 			index = find_maximum(parser->cur_req->delay, parser->cur_req->sectors);
 			parser->cur_req->max_delay = parser->cur_req->delay[index];
-			dbg(L_DEBUG, "max delay:%d\n", parser->cur_req->max_delay);
+
+		} else if (parser->has_busy && parser->cur_req->cmd->cmd_index==TYPE_6) {
+			parser->cur_req->max_delay = (int)parser->cur_req->delay;
 		}
+
+		dbg(L_DEBUG, "max delay:%d\n", parser->cur_req->max_delay);
 	}
 
 	return 0;
@@ -289,7 +306,7 @@ int mmc_xls_init(mmc_parser *parser, char *csvpath)
 	mmc_xls_init_addr_dist(parser, csvpath, dir_name);
 	mmc_xls_init_idle_dist(parser, csvpath, dir_name);
 	mmc_xls_init_seq_throughput(parser, csvpath, dir_name);
-	
+
 	return ret;
 }
 
