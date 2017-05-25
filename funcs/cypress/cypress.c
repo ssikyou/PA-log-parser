@@ -20,6 +20,7 @@ typedef struct cypress{
     unsigned char host_io;//1,4,8
     unsigned char data_rate;//0 sdr,1 ddr
     unsigned int curr_clk;//unit KHz
+	unsigned short block_size;
 }cypress;
 
 static char* get_write_file_path(mmc_request *req, cypress *press, char *path)
@@ -155,16 +156,20 @@ static int format_cmd(mmc_cmd *cmd, cypress *press)
     len += sprintf(buf + len, "CMD%d,Argu=32'h%08x,RespSize=%d",
 			cmd->cmd_index, cmd->arg, spec_resp_size);
 
-    if(resp_size == 32){
+	if(resp_size > 0){
 		if(cmp_type > 0 && cmd->resp_err == 1)
 			cmp_type = 0;
-
-        if(cmp_type > 0){
-        len += sprintf(buf + len, ",CompType=%d,Resp=32'h%08x", cmp_type, cmd->resp.r1);
-            if(rsp_mask != 0)
-                len += sprintf(buf + len, ",Mask=32'h%08x", rsp_mask);
-        }
-    }
+		if(resp_size == 32){
+		    len += sprintf(buf + len, ",Resp=32'h%08x", cmd->resp.r1);
+		    if(cmp_type > 0){
+				len += sprintf(buf + len, ",CompType=%d", cmp_type);
+		        if(rsp_mask != 0)
+		            len += sprintf(buf + len, ",Mask=32'h%08x", rsp_mask);
+		    }
+		}else{
+			len += sprintf(buf + len, ",Resp=128'h%08x%08x%08x%08x", cmd->resp.r2[3], cmd->resp.r2[2], cmd->resp.r2[1], cmd->resp.r2[0]);
+		}
+	}
     len += sprintf(buf + len,"\n");
 
     update_shell_file(&press->file, buf, len);
@@ -175,7 +180,7 @@ static void cypress_set_host(cypress *press)
 	char buf[255];
 	int len = 0;
 
-	len += sprintf(buf + len,"SetHost,CLK=%d,DateRate=%s,IO=%d\n", press->curr_clk, data_rate_str(press->data_rate),press->host_io);
+	len += sprintf(buf + len,"SetHost,CLK=%d,DataRate=%s,IO=%d\n", press->curr_clk, data_rate_str(press->data_rate),press->host_io);
 	update_shell_file(&press->file, buf, len);
 }
 
@@ -248,28 +253,26 @@ static int stop(void *arg, mmc_cmd *stop)
 
 static int read_data(cypress *press,  mmc_request *req)
 {
-	cypress_cfg *cfg = press->cfg;
 	char path[255];
 	char buf[255];
 	int len = 0;
 
 	len = sprintf(buf,"DataR,IO=%d,DataRate=%s,BlockSize=%d,BlockNum=%d,SourceF=%s\n",
-				 cfg->host_io, data_rate_str(cfg->data_rate),
-				 cfg->block_size, req->sectors, get_read_file_path(req, press, path));
+				 press->host_io, data_rate_str(press->data_rate),
+				 press->block_size, req->sectors, get_read_file_path(req, press, path));
 	update_shell_file(&press->file, buf, len);
 	return len;
 }
 
 static int write_data(cypress *press,  mmc_request *req)
 {
-	cypress_cfg *cfg = press->cfg;
 	char path[255];
 	char buf[255];
 	int len = 0;
 
     len += sprintf(buf + len,"DataW,IO=%d,DataRate=%s,BlockSize=%d,BlockNum=%d,SourceF=%s\n",
-		 cfg->host_io, data_rate_str(cfg->data_rate),
-		 cfg->block_size, req->sectors, get_write_file_path(req, press, path));
+		 press->host_io, data_rate_str(press->data_rate),
+		 press->block_size, req->sectors, get_write_file_path(req, press, path));
     len += sprintf(buf + len,"DataWaitReady\n");
 	update_shell_file(&press->file, buf, len);
 	return len;
@@ -354,18 +357,22 @@ static int class1(void*arg, mmc_request *req)
 static int class2(void*arg, mmc_request *req)
 {
 	cypress *press = (cypress *)arg;
-	cypress_cfg *cfg = press->cfg;
 	mmc_cmd *cmd = req->cmd;
-	unsigned short index = cmd->cmd_index;
+	unsigned short index = cmd->cmd_index, old_block_size;
 
 	switch(index){
 		case 16:
-            cfg->block_size = cmd->arg;
+            press->block_size = cmd->arg;
             break;
 		case 17:
         case 18:
-		case 21:
 			read_data(press, req);
+			break;
+		case 21:
+			old_block_size = press->block_size;
+			press->block_size = press->host_io * 16;//set tuning block_size
+			read_data(press, req);
+			press->block_size = old_block_size;
 			break;
 		default:
 			do_assert(cmd);
@@ -508,8 +515,6 @@ static int def(void*arg, mmc_request *req)
 extern void dump_req(mmc_request *req);
 static int handle_large_request(cypress *press, mmc_request *req)
 {
-	cypress_cfg *cfg = press->cfg;
-
 	mmc_cmd *cmd = req->cmd;
     char buf[255], path[255];
 	int is_write, is_openend = 1, len = 0;
@@ -537,7 +542,7 @@ static int handle_large_request(cypress *press, mmc_request *req)
 		is_openend = 0;
 
 	len += sprintf(buf + len, "LargeRw,BlockSize=%d,BlockNum=%d,isWrite=%d,isRandData=0,Addr=32'h%08x,isOpenEnd=%d,SourceF=%s\n",
-			cfg->block_size, req->sectors, is_write, cmd->arg,
+			press->block_size, req->sectors, is_write, cmd->arg,
 			is_openend,is_write?get_write_file_path(req, press, path):get_read_file_path(req, press, path));
 
 	update_shell_file(&press->file, buf, len);
@@ -573,6 +578,7 @@ int cypress_init(func* func, func_param *param)
 
     press->host_io = press->cfg->host_io;
     press->data_rate = press->cfg->data_rate;
+	press->block_size = press->cfg->block_size;
 	//press->curr_state = cfg->def_state;
 	if(press->cfg->curr_state < STATE_TRAN)
     	press->curr_clk = press->cfg->init_clk;
