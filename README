@@ -11,15 +11,35 @@ Example:
 
 2. Configuration:
 	Default config file is "parser.conf".
-	There are some groups in the file, such as "Sector Distribution", "Command Distribution". A group represents an excel file which shows the statistics info. 
-	The configurations under a group will affect excel generationg progress. "file_name_suffix" defines the output excel file name suffix. "x_steps" defines execl chart's x axis value's step, unit is microsecond(us).
-		e.g. for Write Busy Distribution, if the x_step is 20us, then x axis will be like "[0~20), [20~40), ..., [180~200), ...", for each write request, we will calculate the max busy time and detemine which busy range it falls on.
-	If you want to caculate write busy distribution, the csv file must contain BUSY event, otherwise the excel will not generate.
-	If you want to caculate read latency distribution, the csv file must contain DATA event, otherwise the excel will not generate.
+	a. groups for generating excels
+		There are some groups in the file, such as "Sector Distribution", "Command Distribution". A group represents an excel file which shows the statistics info. 
+		The configurations under a group will affect excel generationg progress. "file_name_suffix" defines the output excel file name suffix. "x_steps" defines execl chart's x axis value's step, unit is microsecond(us).
+			e.g. for Write Busy Distribution, if the x_step is 20us, then x axis will be like "[0~20), [20~40), ..., [180~200), ...", for each write request, we will calculate the max busy time and detemine which busy range it falls on.
+		If you want to caculate write busy distribution, the csv file must contain BUSY event, otherwise the excel will not generate.
+		If you want to caculate read latency distribution, the csv file must contain DATA event, otherwise the excel will not generate.
+
+	b. groups for generating script
+		config for cypress script:
+		pattern_type=0					#0 random data, 1 user pattern, 2 int increase, 3 int decrease, 4 from log
+		pattern_data="UserPatternData"	#user data pattern.
+		pattern_len=15					#user pattern data len
+		start_value=100					#use for int inc or int dec
+		block_size=512
+		max_sectors=128					#max sectors per request, if biger than this value it will be divided to several requests. 
+		host_io=1						#1 1bit, 4 4bit, 8 8bit
+		data_rate=0						#0 sdr, 1 ddr
+		init_clk=2000					#init state clock
+		usr_clk=40000					#user space clock,it will use this clock after enter transfer mode and change bus mode. 
+		self_div=1						#0, divided it by this parser tool, 1 divided it use LargeRW command.
+		comp_mask=320					#0x140 command response compare mask.
+		curr_state=0					#0 idle, 1 ready, 2 ident, 3 stby, 4 tran, 5 data, 6 btst, 7 rcv, 8 prg, 9 dis, 10 ina, 11 slp, 12 irq, only 0 and 4 is used for select clock.
+		comp_filt=1						#0 not filt, 1 filt, bit0 resp crc error
+		cmd_filt=3						#0 not filt, 1 filt, bit0 filt illegal cmd between cmd0 and cmd1, bit1 filt no response cmd, bit2 filt bus_test cmd, bit3 filt tuning cmd
 
 3. Output files:
 	log.txt contains debug info.
 	Excels will be generated in out directory.
+	script file and bin files for write will be generated in result directory
 
 4. Current support features:
 	a. generate "Busy/Latency Distribution" excel, including cmd25, cmd24, cmd18, cmd17, cmd6
@@ -28,3 +48,4 @@ Example:
 	d. generate "Address Distribution" excel, including cmd25, cmd18
 	e. generate "Request Idle Distribution" excel
 	f. generate "Seq Throughput" excel, including cmd25, cmd24, cmd18, cmd17
+	g. generate cypress script files.
