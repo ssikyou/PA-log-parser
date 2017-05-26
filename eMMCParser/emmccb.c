@@ -319,8 +319,10 @@ int create_chart(lxw_workbook *workbook, lxw_worksheet *worksheet, xls_sheet_con
     chart_series_set_categories(series, config->sheet_name, config->x1_area.first_row, config->x1_area.first_col, config->x1_area.last_row, config->x1_area.last_col);
     chart_series_set_values(series, config->sheet_name, config->y1_area.first_row, config->y1_area.first_col, config->y1_area.last_row, config->y1_area.last_col);
     chart_series_set_name(series, config->serie_name);
-    chart_series_set_marker_type(series, LXW_CHART_MARKER_CIRCLE);
-    chart_series_set_marker_size(series, 1);
+    if (config->chart_type == LXW_CHART_SCATTER) {
+    	chart_series_set_marker_type(series, LXW_CHART_MARKER_CIRCLE);
+    	//chart_series_set_marker_size(series, 1);
+    }
 
     if (config->serie2_name) {
     	lxw_chart_series *series2 = chart_add_series(chart, NULL, NULL);
