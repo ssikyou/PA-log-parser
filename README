@@ -14,6 +14,7 @@ Example:
 
 3. Configuration:
 	Default config file is "parser.conf".
+
 	a. groups for generating excels
 		There are some groups in the file, such as "Sector Distribution", "Command Distribution". A group represents an excel file which shows the statistics info. 
 		The configurations under a group will affect excel generationg progress. "file_name_suffix" defines the output excel file name suffix. "x_steps" defines execl chart's x axis value's step, unit is microsecond(us).
@@ -40,9 +41,24 @@ Example:
 		cmd_filt=3						#0 not filt, 1 filt, bit0 filt illegal cmd between cmd0 and cmd1, bit1 filt no response cmd, bit2 filt bus_test cmd, bit3 filt tuning cmd
 
 4. Output files:
-	log.txt contains debug info.
-	Excels will be generated in out directory.
-	script file and bin files for write will be generated in result directory
+	a. log.txt contains debug info.
+
+	b. Excels will be generated in out directory.
+		There are 6 kinds of excels available:
+	    xxx_addr_dist.xlsx represents "Address Distribution".
+	    xxx_cmd_dist.xlsx represents "Command Distribution".
+	    xxx_delay_dist.xlsx represents "Busy/Latency Distribution".
+	    xxx_idle_dist.xlsx represents "Request Idle Distribution".
+	    xxx_sector_dist.xlsx represents "Sector Distribution".
+	    xxx_seq_throughput.xlsx represents "Sequential Throughput", there are two series in one chart, the blue serie represents Max Busy/Latency Time for the request, and the red serie represents the Average Throughput(transfer time per sector) of the request.
+
+		note:
+		1). xxx_addr_dist.xlsx, xxx_cmd_dist.xlsx and xxx_sector_dist.xlsx will be generated for every csv.
+		2). xxx_delay_dist.xlsx and xxx_seq_throughput.xlsx will be generated only for csv which has DATA or BUSY info (read command needs DATA info, write command needs BUSY info).
+		3). xxx_idle_dist.xlsx will be generated only for csv which has both DATA and BUSY info.
+		4). Csv file may contain error infos, so the corresponding excels may has errors too.
+
+	c. script file and bin files for write will be generated in result directory
 
 5. Current support features:
 	a. generate "Busy/Latency Distribution" excel, including cmd25, cmd24, cmd18, cmd17, cmd6
