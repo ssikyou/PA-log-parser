@@ -49,7 +49,7 @@ int config_load_list(mmc_parser *parser, char *group, config_list *list, int lis
     
         }
     }else{
-        error("ERR: %s group:%s not exist!\n", __func__, group);
+        dbg(L_INFO,"ERR: %s group:%s not exist!\n", __func__, group);
         return -1;
     }
     return 0;
