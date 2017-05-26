@@ -9,7 +9,10 @@ options:
 Example:
 	PAlogparser -q test.csv
 
-2. Configuration:
+2. How to compile
+	make clean && make
+
+3. Configuration:
 	Default config file is "parser.conf".
 	a. groups for generating excels
 		There are some groups in the file, such as "Sector Distribution", "Command Distribution". A group represents an excel file which shows the statistics info. 
@@ -36,12 +39,12 @@ Example:
 		comp_filt=1						#0 not filt, 1 filt, bit0 resp crc error
 		cmd_filt=3						#0 not filt, 1 filt, bit0 filt illegal cmd between cmd0 and cmd1, bit1 filt no response cmd, bit2 filt bus_test cmd, bit3 filt tuning cmd
 
-3. Output files:
+4. Output files:
 	log.txt contains debug info.
 	Excels will be generated in out directory.
 	script file and bin files for write will be generated in result directory
 
-4. Current support features:
+5. Current support features:
 	a. generate "Busy/Latency Distribution" excel, including cmd25, cmd24, cmd18, cmd17, cmd6
 	b. generate "Command Distribution" excel
 	c. generate "Sector Distribution" excel, including cmd25, cmd18
