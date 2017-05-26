@@ -8,6 +8,12 @@
 #define DATA_RATE_SDR   0
 #define DATA_RATE_DDR   1
 
+#define PATTERN_RANDOM      0
+#define PATTERN_USERINPUT   1
+#define PATTERN_INTINC      2
+#define PATTERN_INTDEC      3
+#define PATTERN_FROMLOG     4
+
 typedef struct cypress_cfg{
     unsigned char pattern_type;// 0 random data, 1 user pattern, 2 int increase, 3 int decrease ,4 from log data
     unsigned char *pattern_data;//save user data pattern
@@ -17,8 +23,12 @@ typedef struct cypress_cfg{
 	int max_sectors;// >0 use max_sectors
     unsigned char host_io;//1,4,8
     unsigned char data_rate;//0 sdr,1 ddr
-    unsigned int host_clk;//unit KHz
+    unsigned int init_clk;//unit KHz, init clock
+    unsigned int usr_clk;//unit KHz user mode clock
 	int self_div;
+	int comp_mask;
+	unsigned char curr_state;//current states for script
+	int filt_illegal;
 }cypress_cfg;
 
 const char *data_rate_str(unsigned char data_rate);

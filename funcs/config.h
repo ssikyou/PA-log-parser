@@ -5,11 +5,6 @@
 
 #include "emmcparser.h"
 
-#define PATTERN_RANDOM      0
-#define PATTERN_USERINPUT   1
-#define PATTERN_INTINC      2
-#define PATTERN_INTDEC      3
-#define PATTERN_FROMLOG     4
 typedef enum config_type{
     CFG_VALUE,
     CFG_STR,
