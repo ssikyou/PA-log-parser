@@ -3,21 +3,28 @@
 arguments:
 	csvfile: csv file path
 options:
-	--debug: print debug messages
-	--quite: only print error messages
+	--debug: print debug messages to log.txt
+	--quite: only print error messages to log.txt
 	--line: only parse first n lines, if not set, all lines will be parsed
 Example:
-	PAlogparser --line=100 test.csv
+	PAlogparser -q test.csv
 
 2. Configuration:
 	Default config file is "parser.conf".
-	There are some groups in the file, such as "Write Busy Dist", "Read Latency Dist". A group represents an excel file which shows the statistics info. 
+	There are some groups in the file, such as "Sector Distribution", "Command Distribution". A group represents an excel file which shows the statistics info. 
 	The configurations under a group will affect excel generationg progress. "file_name_suffix" defines the output excel file name suffix. "x_steps" defines execl chart's x axis value's step, unit is microsecond(us).
 		e.g. for Write Busy Distribution, if the x_step is 20us, then x axis will be like "[0~20), [20~40), ..., [180~200), ...", for each write request, we will calculate the max busy time and detemine which busy range it falls on.
 	If you want to caculate write busy distribution, the csv file must contain BUSY event, otherwise the excel will not generate.
 	If you want to caculate read latency distribution, the csv file must contain DATA event, otherwise the excel will not generate.
 
-3. Current support features:
-	a. generate "Write Busy Distribution" excel
-	b. generate "Read Latency Distribution" excel
+3. Output files:
+	log.txt contains debug info.
+	Excels will be generated in out directory.
 
+4. Current support features:
+	a. generate "Busy/Latency Distribution" excel, including cmd25, cmd24, cmd18, cmd17, cmd6
+	b. generate "Command Distribution" excel
+	c. generate "Sector Distribution" excel, including cmd25, cmd18
+	d. generate "Address Distribution" excel, including cmd25, cmd18
+	e. generate "Request Idle Distribution" excel
+	f. generate "Seq Throughput" excel, including cmd25, cmd24, cmd18, cmd17
