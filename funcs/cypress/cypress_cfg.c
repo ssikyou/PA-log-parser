@@ -61,7 +61,7 @@ int cypress_load_configs(mmc_parser *parser, func_param *param)
 
     ret = config_load_list(parser, "Script Cypress", list, sizeof(list)/sizeof(list[0]));
     if(ret){
-        error("ERR: %s load Cypress config fail\n", __func__);
+        dbg(L_INFO,"ERR: %s load Cypress config fail\n", __func__);
         free(cfg);
         return -1;
     }

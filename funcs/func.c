@@ -65,7 +65,8 @@ int register_func(mmc_parser *parser, func_type type, char *log_path)
         return -1;
     }
 	if(f->ops->load_configs){
-		f->ops->load_configs(parser,param);
+		if(f->ops->load_configs(parser,param))
+			return 0;
 		if(param->cfg == NULL){
 		    printf("ERR: %s  param->cfg is NULL\n", __func__);
 		    free(f);
