@@ -18,13 +18,23 @@ static void func_set_ops(func *f, func_type type)
     case FUNC_XU4:
         break; 
     }
-	if(f->ops->desc)
+	if(f->ops){
+		if(f->ops->desc)
 		f->desc = strdup(f->ops->desc);
-	else{
-
-		sprintf(desc, "func%d", type);
-		f->desc = strdup(desc);
+		else{
+			sprintf(desc, "func%d", type);
+			f->desc = strdup(desc);
+		}
 	}
+}
+
+int register_funcs(mmc_parser *parser, char *log_path)
+{
+	int i = 0;
+	for(i = 0; i< 3; i++){
+		register_func(parser, (func_type)i, log_path);
+	}
+	return 0;
 }
 
 int register_func(mmc_parser *parser, func_type type, char *log_path)
@@ -50,7 +60,7 @@ int register_func(mmc_parser *parser, func_type type, char *log_path)
 
     func_set_ops(f, type);
     if(f->ops == NULL){
-        printf("ERR: %s  func->ops is NULL\n", __func__);
+        //printf("ERR: %s type:%d func->ops is NULL\n", __func__, type);
         free(f);
         return -1;
     }

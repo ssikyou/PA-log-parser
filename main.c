@@ -158,7 +158,7 @@ int main(int argc, char **argv)
 		goto parser_destroy;
 	}
 
-	ret = register_func(parser, FUNC_CYPRESS, argv[0]);
+	ret = register_funcs(parser, argv[0]);
 	if (ret) {
 		goto parser_destroy;
 	}
