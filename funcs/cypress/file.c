@@ -178,6 +178,23 @@ int update_shell_file(file_info *file, char *buf, int len)
     return 0;
 }
 
+int create_bus_test_file(const char *name, void *val,unsigned short len)
+{
+    int fd;
+
+    fd = open(name, O_CREAT | O_RDWR |O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH);
+    if (fd < 0) {
+        printf("%s:ERR file create fail:%d\n", __func__, fd);
+		return -1;
+	}
+
+    write(fd, val, len);
+
+    close(fd);
+
+    return 0;
+}
+
 int create_intinc_file(const char *name,unsigned int *val,unsigned short blocks)
 {
     int fd;

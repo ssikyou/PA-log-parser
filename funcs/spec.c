@@ -84,7 +84,7 @@ int is_cmd_rsp_rvd(unsigned short cmd_index)
 	return mmc_rsp_table[cmd_index]&RSP_RVD;
 }
 
-int get_cmd_rsp_size(unsigned short cmd_index)
+int get_spec_rsp_size(unsigned short cmd_index)
 {
 	int ret = 0;
 

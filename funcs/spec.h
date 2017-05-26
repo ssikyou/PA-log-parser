@@ -69,7 +69,7 @@ int is_cmd_rsp_r4(unsigned short cmd_index);
 int is_cmd_rsp_r5(unsigned short cmd_index);
 int is_cmd_rsp_und(unsigned short cmd_index);
 int is_cmd_rsp_rvd(unsigned short cmd_index);
-int get_cmd_rsp_size(unsigned short cmd_index);
+int get_spec_rsp_size(unsigned short cmd_index);
 int is_busy_cmd(unsigned short cmd_index);
 
 void* mmc_spec_init(void *arg, class_ops *ops, sbc_callbak *sbc, stop_callbak *stop, class_callbak *def);

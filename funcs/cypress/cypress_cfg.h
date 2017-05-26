@@ -14,6 +14,15 @@
 #define PATTERN_INTDEC      3
 #define PATTERN_FROMLOG     4
 
+#define	COMP_FILT_NONE		0
+#define	COMP_FILT_RSP_CRC	1//BIT0
+
+#define	CMD_FILT_NONE		0
+#define	CMD_FILT_ILLEGAL	(0<<1)//BIT0
+#define	CMD_FILT_NO_RSP		(1<<1)//BIT1
+#define	CMD_FILT_TST_CMD	(2<<1)//BIT2
+#define CMD_FILT_TUN_CMD	(3<<1)//BIT3
+
 typedef struct cypress_cfg{
     unsigned char pattern_type;// 0 random data, 1 user pattern, 2 int increase, 3 int decrease ,4 from log data
     unsigned char *pattern_data;//save user data pattern
@@ -28,7 +37,9 @@ typedef struct cypress_cfg{
 	int self_div;
 	int comp_mask;
 	unsigned char curr_state;//current states for script
-	int filt_illegal;
+	unsigned char comp_filt;//0 not filt, 1 filt, bit0 resp crc error
+	int cmd_filt;//0 not filt, 1 filt, bit0 filt illegal cmd between cmd0 and cmd1, bit1 filt no response cmd
+
 }cypress_cfg;
 
 const char *data_rate_str(unsigned char data_rate);

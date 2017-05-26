@@ -20,7 +20,8 @@ static config_list list[]={
 	{.type = CFG_INT, .key = "self_div"},//10
 	{.type = CFG_INT, .key = "comp_mask"},//11
 	{.type = CFG_INT, .key = "curr_state"},//12
-	{.type = CFG_INT, .key = "filt_illegal"},
+	{.type = CFG_INT, .key = "comp_filt"},//13
+	{.type = CFG_INT, .key = "cmd_filt"},//14
 };
 
 
@@ -78,7 +79,8 @@ int cypress_load_configs(mmc_parser *parser, func_param *param)
 	cfg->self_div = list[10].val_int;
 	cfg->comp_mask = list[11].val_int;
 	cfg->curr_state = list[12].val_int;
-	cfg->filt_illegal = list[13].val_int;
+	cfg->comp_filt = list[13].val_int;
+	cfg->cmd_filt = list[14].val_int;
 
 	param->cfg = (void *)cfg;
 	if((cfg->self_div == 0 )&&(cfg->max_sectors > 0))

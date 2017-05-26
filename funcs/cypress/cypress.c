@@ -13,7 +13,7 @@
 typedef struct cypress{
     cypress_cfg *cfg;
 	void *spec;
-    int start_value;
+    unsigned int start_value;
 	int exec_cmd0;
 	int exec_cmd1;
     file_info   file;
@@ -21,18 +21,40 @@ typedef struct cypress{
     unsigned char data_rate;//0 sdr,1 ddr
     unsigned int curr_clk;//unit KHz
 	unsigned short block_size;
+	unsigned char file_type;
 }cypress;
+
+
+static int create_test_file(cypress *press, char *path)
+{
+	unsigned short data = 0;
+	int len = 1;
+	switch(press->host_io){
+		case HOST_IO_1BIT:
+			data = 0x80;
+			break;
+		case HOST_IO_4BIT:
+			data = 0x5a;
+			break;
+		case HOST_IO_8BIT:
+			len = 2;
+			data = 0x55aa;
+			break;
+	}
+	create_bus_test_file(path, (void *)&data, len);
+	error("%s:path:%s, len:%d\n",__func__, path, len);
+	return 0;
+}
 
 static char* get_write_file_path(mmc_request *req, cypress *press, char *path)
 {
-    void *data = req->data;
     unsigned short block_count = req->sectors;
     file_info *file = &press->file;
     cypress_cfg *cfg = press->cfg;
 
     sprintf(path,"%s/%d.bin",file->write_path, file->wid++);
     dbg(L_INFO, "%s:path:%s\n",__func__, path);
-    switch(cfg->pattern_type){
+    switch(press->file_type){
         case 0:
             create_random_file(path, block_count);
             break;
@@ -40,14 +62,17 @@ static char* get_write_file_path(mmc_request *req, cypress *press, char *path)
             create_pattern_file(path, cfg->pattern_data, cfg->pattern_len, block_count);
             break;
         case 2:
-            create_intinc_file(path, &cfg->start_value, block_count);
+            create_intinc_file(path, &press->start_value, block_count);
             break;
         case 3:
-            create_intdec_file(path, &cfg->start_value, block_count);
+            create_intdec_file(path, &press->start_value, block_count);
             break;
         case 4:
-            create_logdata_file(path, data, req->len, req->len_per_trans, block_count);
+            create_logdata_file(path, req->data, req->len, req->len_per_trans, block_count);
             break;
+		case 5:
+			create_test_file(press, path);
+			break;
         default:
             create_random_file(path, block_count);
     }
@@ -88,17 +113,32 @@ static int cmd_compare_type(mmc_cmd *cmd)
     }
 }
 
-static int filt_illegal(mmc_cmd *cmd, cypress *press)
+static int cmd_err_filt(mmc_cmd *cmd, cypress *press)
 {
     cypress_cfg *cfg = press->cfg;
 
-	if(cfg->filt_illegal){
+	if(cfg->cmd_filt&CMD_FILT_ILLEGAL){
 		if((press->exec_cmd0 == 1)&&(cmd->cmd_index != 1))
 			return 1;// do not exec class ops
 		else if(cmd->cmd_index == 0){
 			press->exec_cmd0 = 1;
 		}else if(cmd->cmd_index == 1)
 			press->exec_cmd0 = 0;
+	}
+
+	if(cfg->cmd_filt&CMD_FILT_NO_RSP){
+		if((cmd->resp_type == RESP_UND) && (get_spec_rsp_size(cmd->cmd_index) > 0))
+			return 1;
+	}
+
+	if(cfg->cmd_filt&CMD_FILT_TST_CMD){
+		if((cmd->cmd_index == 14) && (cmd->cmd_index == 19))
+			return 1;
+	}
+
+	if(cfg->cmd_filt&CMD_FILT_TUN_CMD){
+		if((cmd->cmd_index == 21) )
+			return 1;
 	}
 
 	return 0;
@@ -134,12 +174,13 @@ static int get_rsp_size(mmc_cmd *cmd, int spec_resp_size)
 
 static int format_cmd(mmc_cmd *cmd, cypress *press)
 {
+    cypress_cfg *cfg = press->cfg;
     int resp_size = 32, spec_resp_size = 0, rsp_mask = 0, cmp_type = 0;
     int len = 0;
     char buf[512];
 	int ret = 0;
 
-	ret = filt_illegal(cmd, press);
+	ret = cmd_err_filt(cmd, press);
 	if(ret)
 		return ret;
 
@@ -147,7 +188,9 @@ static int format_cmd(mmc_cmd *cmd, cypress *press)
 	if(ret)
 		return ret;
 
-	spec_resp_size = get_cmd_rsp_size(cmd->cmd_index);
+	if(cmd->cmd_index ==14)
+		return 0;
+	spec_resp_size = get_spec_rsp_size(cmd->cmd_index);
 	resp_size = get_rsp_size(cmd, spec_resp_size);
 
     rsp_mask = cmd_rsp_mask(cmd, press);
@@ -157,7 +200,7 @@ static int format_cmd(mmc_cmd *cmd, cypress *press)
 			cmd->cmd_index, cmd->arg, spec_resp_size);
 
 	if(resp_size > 0){
-		if(cmp_type > 0 && cmd->resp_err == 1)
+		if(cmp_type > 0 && (cmd->resp_err == 1 && cfg->comp_filt&COMP_FILT_RSP_CRC))
 			cmp_type = 0;
 		if(resp_size == 32){
 		    len += sprintf(buf + len, ",Resp=32'h%08x", cmd->resp.r1);
@@ -294,12 +337,23 @@ static int do_sleep(cypress *press, int ms)
 	return 0;
 }
 
+static int do_read_test(cypress *press)
+{
+	char buf[255];
+	int len = 0;
+
+	len += sprintf(buf + len,"BTST,Argu=32'h00000000,CompType=3'h6,Resp=32'h00001300,ExpD=8'h40\n");
+	update_shell_file(&press->file, buf, len);
+	return 0;
+}
+
 static int class1(void*arg, mmc_request *req)
 {
 	cypress *press = (cypress *)arg;
 	cypress_cfg *cfg = press->cfg;
 	mmc_cmd *cmd = req->cmd;
-	unsigned short index = cmd->cmd_index;
+	unsigned short index = cmd->cmd_index, block_size;
+	unsigned char file_type;
 
 	switch(index){
 		case 0:
@@ -340,12 +394,27 @@ static int class1(void*arg, mmc_request *req)
 			wait_ready(press);
 			break;
 		case 14:
+/*
+			file_type = press->file_type;
+			block_size = press->block_size;
+			press->file_type = 5;
+			press->block_size = ((press->host_io == 8)?2:1);
 			read_data(press, req);
+			press->file_type = file_type;
+			press->block_size = block_size;
+*/
+			do_read_test(press);
 			break;
 		case 15:
 			break;
 		case 19:
-			read_data(press, req);
+			file_type = press->file_type;
+			block_size = press->block_size;
+			press->file_type = 5;
+			press->block_size = ((press->host_io == 8)?2:1);
+			write_data(press, req);
+			press->file_type = file_type;
+			press->block_size = block_size;
 			break;
 		default:
 			do_assert(cmd);
@@ -584,6 +653,8 @@ int cypress_init(func* func, func_param *param)
     	press->curr_clk = press->cfg->init_clk;
 	else
 		press->curr_clk = press->cfg->usr_clk;
+	press->file_type = press->cfg->pattern_type;
+	press->start_value = press->cfg->start_value;
 
 	press->spec = mmc_spec_init((void *)press, &ops, &sbc, &stop, &def);
 	if(press->spec == NULL){
