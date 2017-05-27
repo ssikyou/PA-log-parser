@@ -289,23 +289,43 @@ void mmc_destroy_xls_list(GSList *list)
 int mmc_xls_init(mmc_parser *parser, char *csvpath)
 {
 	int ret = 0;
+	int i = 0;
 
 	char *dir_name = "out";
+	char *sub_dir_names[] = {
+		"out/delay-distribution",
+		"out/command-distribution",
+		"out/sector-distribution",
+		"out/address-distribution",
+		"out/idle-distribution",
+		"out/throughput-distribution",
+	};
 
 	if (access(dir_name, F_OK|R_OK|W_OK|X_OK)) {
 		ret = mkdir(dir_name, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		if (ret) {
 			perror("mkdir dir failed");
-			dir_name = NULL;
+			return -1;
 		}
 	}
 
-	mmc_xls_init_rw_dist(parser, csvpath, dir_name);
-	mmc_xls_init_cmd_dist(parser, csvpath, dir_name);
-	mmc_xls_init_sc_dist(parser, csvpath, dir_name);
-	mmc_xls_init_addr_dist(parser, csvpath, dir_name);
-	mmc_xls_init_idle_dist(parser, csvpath, dir_name);
-	mmc_xls_init_seq_throughput(parser, csvpath, dir_name);
+	for (i=0; i<NELEMS(sub_dir_names); i++) {
+		if (access(sub_dir_names[i], F_OK|R_OK|W_OK|X_OK)) {
+			ret = mkdir(sub_dir_names[i], S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+			if (ret) {
+				perror("mkdir sub dir failed");
+				return -1;
+			}
+		}
+	}
+
+	i = 0;
+	mmc_xls_init_rw_dist(parser, csvpath, sub_dir_names[i++]);
+	mmc_xls_init_cmd_dist(parser, csvpath, sub_dir_names[i++]);
+	mmc_xls_init_sc_dist(parser, csvpath, sub_dir_names[i++]);
+	mmc_xls_init_addr_dist(parser, csvpath, sub_dir_names[i++]);
+	mmc_xls_init_idle_dist(parser, csvpath, sub_dir_names[i++]);
+	mmc_xls_init_seq_throughput(parser, csvpath, sub_dir_names[i++]);
 
 	return ret;
 }

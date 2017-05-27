@@ -164,7 +164,10 @@ int main(int argc, char **argv)
 	}
 
 	//register xls callback
-	mmc_xls_init(parser, argv[0]);
+	ret = mmc_xls_init(parser, argv[0]);
+	if (ret) {
+		goto parser_destroy;
+	}
 
 #if 1
 	unsigned int cur_line = 1;

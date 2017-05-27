@@ -177,7 +177,7 @@ int mmc_xls_init_addr_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 		sheet->chart_type = LXW_CHART_SCATTER;
 		sheet->chart_title_name = "CMD25 Address Distribution";
 		sheet->serie_name = "CMD25 Address Dist";
-		sheet->chart_x_name = "Address";
+		sheet->chart_x_name = "Address/sector";
 		sheet->chart_y_name = "Percentage";
 		sheet->chart_row = lxw_name_to_row("F8");
 		sheet->chart_col = lxw_name_to_col("F8");
@@ -192,7 +192,7 @@ int mmc_xls_init_addr_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 		sheet->chart_type = LXW_CHART_SCATTER;
 		sheet->chart_title_name = "CMD18 Address Distribution";
 		sheet->serie_name = "CMD18 Address Dist";
-		sheet->chart_x_name = "Address";
+		sheet->chart_x_name = "Address/sector";
 		sheet->chart_y_name = "Percentage";
 		sheet->chart_row = lxw_name_to_row("F8");
 		sheet->chart_col = lxw_name_to_col("F8");

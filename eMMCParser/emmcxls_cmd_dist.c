@@ -70,8 +70,8 @@ int write_data_cmd_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *
 	format_set_num_format(format, "0.00");
 
 	worksheet_write_string(worksheet, CELL("A1"), config->chart_x_name, bold);
-    worksheet_write_string(worksheet, CELL("B1"), config->chart_y_name, bold);
-    worksheet_write_string(worksheet, CELL("C1"), "Percentage", bold);
+    worksheet_write_string(worksheet, CELL("B1"), "Counts", bold);
+    worksheet_write_string(worksheet, CELL("C1"), config->chart_y_name, bold);
 
     row=1;
     //g_slist_foreach(dist_list, (GFunc)write_row, NULL);
@@ -90,9 +90,9 @@ int write_data_cmd_dist(lxw_workbook *workbook, lxw_worksheet *worksheet, void *
  	config->x1_area.last_col = 0;
 
  	config->y1_area.first_row = 1;
- 	config->y1_area.first_col = 1;
+ 	config->y1_area.first_col = 2;
  	config->y1_area.last_row = row-1;
- 	config->y1_area.last_col = 1;
+ 	config->y1_area.last_col = 2;
 
 	//summary
     worksheet_write_string(worksheet, CELL("F1"), "Total Commands", bold);
@@ -152,7 +152,7 @@ int mmc_xls_init_cmd_dist(mmc_parser *parser, char *csvpath, char *dir_name)
 		sheet->chart_title_name = "Command Distribution";
 		sheet->serie_name = "Command Dist";
 		sheet->chart_x_name = "Command Index";
-		sheet->chart_y_name = "Counts";
+		sheet->chart_y_name = "Percentage";
 		sheet->chart_row = lxw_name_to_row("F8");
 		sheet->chart_col = lxw_name_to_col("F8");
 		sheet->chart_x_scale = 2;
