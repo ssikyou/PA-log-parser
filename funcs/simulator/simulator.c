@@ -26,8 +26,9 @@ static int simulator_shell_header(simulator *sim)
 {
 	char buf[255];
 	int len = 0;
+	simulator_cfg *cfg = sim->cfg;
 
-	len = sprintf(buf + len,"Cycles\tR/W\tAddr\tLen\tForce Pgm\tReliable Wr\n");
+	len = sprintf(buf + len,"%s\tR/W\tAddr\tLen\tForcePgm\tReliableWr\n",cfg->show_id?"EventId":"Cycles");
 	update_shell_file(&sim->file, buf, len);
 	return 0;
 }
