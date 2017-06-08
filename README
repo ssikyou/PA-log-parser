@@ -60,6 +60,7 @@ Example:
 		2). xxx_delay_dist.xlsx and xxx_seq_throughput.xlsx will be generated only for csv which has DATA or BUSY info (read command needs DATA info, write command needs BUSY info).
 		3). xxx_idle_dist.xlsx will be generated only for csv which has both DATA and BUSY info.
 		4). Csv file may contain error infos, so the corresponding excels may has errors too.
+		5). For simulator user partation part script will be generate only.
 
 	c. script file and bin files for write will be generated in result directory
 
