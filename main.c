@@ -13,7 +13,6 @@
 #include "glib.h"
 
 #include "func.h"
-#include "func_ops.h"
 
 //int g_debug_level = L_DEBUG;
 int g_debug_level = L_INFO;

@@ -25,11 +25,14 @@ objects = \
 	eMMCParser/emmcxls_idle_dist.o \
 	eMMCParser/emmcxls_seq_throughput.o \
 	funcs/func.o \
+	funcs/func_ops.o \
 	funcs/config.o \
 	funcs/spec.o	\
 	funcs/file.o \
 	funcs/cypress/cypress.o \
-	funcs/cypress/cypress_cfg.o
+	funcs/cypress/cypress_cfg.o \
+	funcs/simulator/simulator.o \
+	funcs/simulator/simulator_cfg.o
 
 progs = PAlogparser
 depend_libs =

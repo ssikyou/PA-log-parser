@@ -7,36 +7,6 @@
 #include "func.h"
 #include "func_ops.h"
 
-static void func_set_ops(func *f, func_type type)
-{
-	char desc[25];
-
-    switch(type){
-    case FUNC_CYPRESS:
-        f->ops = &cypress_ops;
-    case FUNC_SIMULATE:
-    case FUNC_XU4:
-        break; 
-    }
-	if(f->ops){
-		if(f->ops->desc)
-		f->desc = strdup(f->ops->desc);
-		else{
-			sprintf(desc, "func%d", type);
-			f->desc = strdup(desc);
-		}
-	}
-}
-
-int register_funcs(mmc_parser *parser, char *log_path)
-{
-	int i = 0;
-	for(i = 0; i< 3; i++){
-		register_func(parser, (func_type)i, log_path);
-	}
-	return 0;
-}
-
 int register_func(mmc_parser *parser, func_type type, char *log_path)
 {
     mmc_req_cb *cb;
@@ -81,6 +51,15 @@ int register_func(mmc_parser *parser, func_type type, char *log_path)
     mmc_register_req_cb(parser, cb);
 
     return 0;
+}
+
+int register_funcs(mmc_parser *parser, char *log_path)
+{
+	int i = 0;
+	for(i = 0; i< FUNC_NO; i++){
+		register_func(parser, (func_type)i, log_path);
+	}
+	return 0;
 }
 
 int handle_large_request(func *f, mmc_request *req, int max_sectors)

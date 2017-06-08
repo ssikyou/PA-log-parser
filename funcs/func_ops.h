@@ -1,5 +1,12 @@
-#ifndef _CYPRESS_H_
-#define _CYPRESS_H_
+#ifndef _FUNC_OPS_H_
+#define _FUNC_OPS_H_
 
-extern func_ops cypress_ops;
+#define FUNC_NO (3)
+typedef enum func_type{
+    FUNC_CYPRESS,
+    FUNC_SIMULATE,
+    FUNC_XU4
+}func_type;
+
+void func_set_ops(func *f, func_type type);
 #endif

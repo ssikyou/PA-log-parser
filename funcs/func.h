@@ -5,12 +5,6 @@
 
 typedef struct func func;
 
-typedef enum func_type{
-    FUNC_CYPRESS,
-    FUNC_SIMULATE,
-    FUNC_XU4
-}func_type;
-
 typedef struct func_param{
     int has_data;
     int has_busy;
@@ -37,7 +31,6 @@ typedef struct func{
 }func;
 
 int register_funcs(mmc_parser *parser, char *log_path);
-int register_func(mmc_parser *parser, func_type type, char *log_path);
 int func_init(mmc_parser *parser, void *arg);
 int func_request(mmc_parser *parser, void *arg);
 int func_destory(mmc_parser *parser, void *arg);

@@ -114,17 +114,23 @@ int file_init(file_info *file, const char *desc, const char *pattern, const char
 	    file->pattern = strdup(pattern);
 	}
 
+	sprintf(name,"%s/result/%s/%s/%s",file->log_path, desc, file->log_name, file->pattern);
+	file->shell_path = strdup(name);
+	ret = check_creat_dir(file->shell_path);
+	if(ret)
+	    return ret;
+
 	if(need_bins){
 		file->rid = 0;//file name id for read
 		file->wid = 0;//file name id for write
-		sprintf(name,"%s/result/%s/%s/%s/write",file->log_path, desc, file->log_name, file->pattern);
+		sprintf(name,"%s/write",file->shell_path);
 
 		file->write_path = strdup(name);
 		ret = check_creat_dir(file->write_path);
 		if(ret)
 		    return ret;
 
-		sprintf(name,"%s/result/%s/%s/%s/read",file->log_path, desc, file->log_name, file->pattern);
+		sprintf(name,"%s/read",file->shell_path);
 		file->read_path = strdup(name);
 		ret = check_creat_dir(file->read_path);
 		if(ret)
@@ -132,7 +138,7 @@ int file_init(file_info *file, const char *desc, const char *pattern, const char
 
 	}
 
-    sprintf(name,"%s/result/%s/%s/%s/%s.txt",file->log_path, desc, file->log_name, file->pattern, file->log_name);
+    sprintf(name,"%s/%s.txt",file->shell_path, file->log_name);
     file->shell_name = strdup(name);
     fd = open(file->shell_name, O_CREAT | O_RDWR |O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
     if(fd == -1)
@@ -154,6 +160,10 @@ int file_deinit(file_info *file){
     if(file->pattern != NULL){
         free(file->pattern);
         file->pattern = NULL;
+    }
+    if(file->shell_path != NULL){
+        free(file->shell_path);
+        file->shell_path = NULL;
     }
     if(file->shell_name != NULL){
         free(file->shell_name);

@@ -15,6 +15,7 @@ typedef struct file_info{
     char *log_name;//parse log file name,except ".cvs".
     char *log_path;//log file path, except last '/' and log_name
     char *pattern;
+	char *shell_path;// path to shell
     char *shell_name;
     char *read_path;
     char *write_path;
