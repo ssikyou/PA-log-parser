@@ -32,87 +32,126 @@ static int simulator_shell_header(simulator *sim)
 	return 0;
 }
 
-static int simulator_read(simulator *sim, unsigned int addr, unsigned short sectors)
+static int simulator_read(simulator *sim, unsigned int event_id, unsigned int addr, unsigned short sectors)
 {
 	char buf[255];
-	int len = 0;
-	len = sprintf(buf + len,"%d\tRe\t%x\t%x\t0\t0\n", sim->cycle++, addr, sectors);
-	update_shell_file(&sim->file, buf, len);
-
-	return 0;
-}
-
-static int simulator_write(simulator *sim, unsigned int addr, unsigned short sectors)
-{
-	char buf[255];
-	int len = 0;
-	len = sprintf(buf + len,"%d\tWr\t%x\t%x\t%d\t%d\n", sim->cycle++, addr, sectors, sim->force_prg, sim->reliable_wr);
-	update_shell_file(&sim->file, buf, len);
-
-	return 0;
-}
-
-static int simulator_trim(simulator *sim)
-{
-	char buf[255];
-	int len = 0;
-	unsigned int addr;
-	unsigned short sectors;
-
-	addr = sim->erase_start;
-	sectors = sim->erase_end - sim->erase_start + 1;
-
-	len = sprintf(buf + len,"%d\ttr\t%x\t%x\t0\t0\n", sim->cycle++, addr, sectors);
-	update_shell_file(&sim->file, buf, len);
-	return 0;
-}
-
-static int simulator_discard(simulator *sim)
-{
-	char buf[255];
-	int len = 0;
-	unsigned int addr;
-	unsigned short sectors;
-
-	addr = sim->erase_start;
-	sectors = sim->erase_end - sim->erase_start + 1;
-
-	len = sprintf(buf + len,"%d\tDis\t%x\t%x\t0\t0\n", sim->cycle++, addr, sectors);
-	update_shell_file(&sim->file, buf, len);
-	return 0;
-}
-
-static int simulator_erase(simulator *sim)
-{
-	char buf[255];
-	int len = 0;
-	unsigned int addr = 0, sectors = 0;
+	unsigned int len = 0, id;
 	simulator_cfg *cfg = sim->cfg;
+
+	if(cfg->show_id)
+		id = event_id;
+	else
+		id =sim->cycle++;
+	len = sprintf(buf + len,"%d\tRe\t%x\t%x\t0\t0\n", id, addr, sectors);
+	update_shell_file(&sim->file, buf, len);
+
+	return 0;
+}
+
+static int simulator_write(simulator *sim, unsigned int event_id, unsigned int addr, unsigned short sectors)
+{
+	char buf[255];
+	unsigned int len = 0, id;
+	simulator_cfg *cfg = sim->cfg;
+
+	if(cfg->show_id)
+		id = event_id;
+	else
+		id =sim->cycle++;
+	len = sprintf(buf + len,"%d\tWr\t%x\t%x\t%d\t%d\n", id, addr, sectors, sim->force_prg, sim->reliable_wr);
+	update_shell_file(&sim->file, buf, len);
+
+	return 0;
+}
+
+static int simulator_trim(simulator *sim, unsigned int event_id)
+{
+	char buf[255];
+	unsigned int len = 0, id;
+	simulator_cfg *cfg = sim->cfg;
+	unsigned int addr;
+	unsigned short sectors;
+
+	if(cfg->show_id)
+		id = event_id;
+	else
+		id =sim->cycle++;
+	addr = sim->erase_start;
+	sectors = sim->erase_end - sim->erase_start + 1;
+
+	len = sprintf(buf + len,"%d\ttr\t%x\t%x\t0\t0\n", id, addr, sectors);
+	update_shell_file(&sim->file, buf, len);
+	return 0;
+}
+
+static int simulator_discard(simulator *sim, unsigned int event_id)
+{
+	char buf[255];
+	unsigned int addr;
+	unsigned short sectors;
+	unsigned int len = 0, id;
+	simulator_cfg *cfg = sim->cfg;
+
+	if(cfg->show_id)
+		id = event_id;
+	else
+		id =sim->cycle++;
+	addr = sim->erase_start;
+	sectors = sim->erase_end - sim->erase_start + 1;
+
+	len = sprintf(buf + len,"%d\tDis\t%x\t%x\t0\t0\n", id, addr, sectors);
+	update_shell_file(&sim->file, buf, len);
+	return 0;
+}
+
+static int simulator_erase(simulator *sim, unsigned int event_id)
+{
+	char buf[255];
+	unsigned int addr = 0, sectors = 0;
+	unsigned int len = 0, id;
+	simulator_cfg *cfg = sim->cfg;
+
+	if(cfg->show_id)
+		id = event_id;
+	else
+		id =sim->cycle++;
 
 	addr = sim->erase_start*cfg->erase_sectors;
 	sectors = (sim->erase_end - sim->erase_start +1)*cfg->erase_sectors;
 
-	len = sprintf(buf + len,"%d\tEr\t%x\t%x\t0\t0\n", sim->cycle++, addr, sectors);
+	len = sprintf(buf + len,"%d\tEr\t%x\t%x\t0\t0\n", id, addr, sectors);
 	update_shell_file(&sim->file, buf, len);
 	return 0;
 }
 
-static int simulator_reset(simulator *sim)
+static int simulator_reset(simulator *sim, unsigned int event_id)
 {
 	char buf[255];
-	int len = 0;
+	unsigned int len = 0, id;
+	simulator_cfg *cfg = sim->cfg;
 
-	len = sprintf(buf + len,"%d\tPOR\t0\t0\t0\t0\n", sim->cycle++);
+	if(cfg->show_id)
+		id = event_id;
+	else
+		id =sim->cycle++;
+
+	len = sprintf(buf + len,"%d\tPOR\t0\t0\t0\t0\n", id);
 	update_shell_file(&sim->file, buf, len);
 	return 0;
 }
 
-static int simulator_suddom_reset(simulator *sim)
+static int simulator_suddom_reset(simulator *sim, unsigned int event_id)
 {
 	char buf[255];
-	int len = 0;
+	unsigned int len = 0, id;
+	simulator_cfg *cfg = sim->cfg;
 
-	len = sprintf(buf + len,"%d\tSPOR\t0\t0\t0\t0\n", sim->cycle++);
+	if(cfg->show_id)
+		id = event_id;
+	else
+		id =sim->cycle++;
+
+	len = sprintf(buf + len,"%d\tSPOR\t0\t0\t0\t0\n", id);
 	update_shell_file(&sim->file, buf, len);
 	return 0;
 }
@@ -129,7 +168,7 @@ static int class1(void*arg, mmc_request *req)
 	switch(index){
 		case 0:
 			if(cfg->map_reset)
-				simulator_reset(sim);
+				simulator_reset(sim, cmd->event_id);
 			break;
 		case 6:
 		    id = (cmd->arg>>16)&0xff;
@@ -158,7 +197,7 @@ static int class2(void*arg, mmc_request *req)
 	switch(index){
 		case 17:
 		case 18:
-			simulator_read(sim, cmd->arg, req->sectors);
+			simulator_read(sim, cmd->event_id, cmd->arg, req->sectors);
 			break;
 	}
 
@@ -174,7 +213,7 @@ static int class4(void*arg, mmc_request *req)
 	switch(index){
 		case 24:
 		case 25:
-			simulator_write(sim, cmd->arg, req->sectors);
+			simulator_write(sim, cmd->event_id, cmd->arg, req->sectors);
 			break;
 	}
 
@@ -196,11 +235,11 @@ static int class5(void*arg, mmc_request *req)
 			break;
 		case 38:
 			if((cmd->arg & 0x3) == 1)//trim
-				simulator_trim(sim);
+				simulator_trim(sim, cmd->event_id);
 			else if((cmd->arg == 0) ||(cmd->arg == 0x80000000))
-				simulator_erase(sim);
+				simulator_erase(sim, cmd->event_id);
 			else if((cmd->arg & 0x3) == 3)
-				simulator_discard(sim);
+				simulator_discard(sim, cmd->event_id);
 
 			sim->erase_start = 0;
 			sim->erase_end = 0;
@@ -236,7 +275,6 @@ int simulator_init(func* func, func_param *param)
 		error("%s init fail\n", __func__);
         return ret;
     }
-
 	sim->in_userpart = 1;
 	sim->spec = mmc_spec_init((void *)sim, &ops, &sbc, NULL, NULL);
     ret = file_init(&sim->file, func->desc, NULL, param->log_path, 0);

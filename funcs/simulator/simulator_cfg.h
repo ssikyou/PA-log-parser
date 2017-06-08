@@ -2,9 +2,9 @@
 #define _SIMULATOR_CFG_H_
 
 typedef struct simulator_cfg{
-    int block_size;
 	int erase_sectors;
 	int map_reset;//0 not filt, 1 filt, bit0 filt illegal cmd between cmd0 and cmd1, bit1 filt no response cmd
+	int show_id;
 }simulator_cfg;
 
 int simulator_load_configs(mmc_parser *parser, func_param *param);

@@ -5,9 +5,9 @@
 #include "simulator_cfg.h"
 
 static config_list list[]={
-    {.type = CFG_INT, .key = "block_size"},//0
 	{.type = CFG_INT, .key = "erase_sectors"},//1
     {.type = CFG_INT, .key = "map_reset"},//2
+	{.type = CFG_INT, .key = "show_id"},//3
 };
 
 int simulator_load_configs(mmc_parser *parser, func_param *param)
@@ -28,9 +28,9 @@ int simulator_load_configs(mmc_parser *parser, func_param *param)
         return -1;
     }
 
-    cfg->block_size = list[0].val_int;
-    cfg->erase_sectors = list[1].val_int;
-	cfg->map_reset = list[2].val_int;
+    cfg->erase_sectors = list[0].val_int;
+	cfg->map_reset = list[1].val_int;
+	cfg->show_id = list[2].val_int;
 
 	param->cfg = (void *)cfg;
 
