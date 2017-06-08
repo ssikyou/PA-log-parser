@@ -39,6 +39,11 @@ int simulator_load_configs(mmc_parser *parser, func_param *param)
 
 int simulator_config_init(simulator_cfg *cfg)
 {
+	if(cfg->erase_sectors <= 0){
+		error("ERR: %s error config on erase_sectors:%d\n", __func__,cfg->erase_sectors);
+		return -1;
+	}
+
 	return 0;
 }
 
