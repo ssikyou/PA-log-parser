@@ -24,22 +24,25 @@ Example:
 
 	b. groups for generating script
 		config for cypress script:
-		pattern_type=0					#0 random data, 1 user pattern, 2 int increase, 3 int decrease, 4 from log
-		pattern_data="UserPatternData"	#user data pattern.
-		pattern_len=15					#user pattern data len
-		start_value=100					#use for int inc or int dec
-		block_size=512
-		max_sectors=128					#max sectors per request, if biger than this value it will be divided to several requests. 
-		host_io=1						#1 1bit, 4 4bit, 8 8bit
-		data_rate=0						#0 sdr, 1 ddr
-		init_clk=2000					#init state clock
-		usr_clk=40000					#user space clock,it will use this clock after enter transfer mode and change bus mode. 
-		self_div=1						#0, divided it by this parser tool, 1 divided it use LargeRW command.
-		comp_mask=320					#0x140 command response compare mask.
-		curr_state=0					#0 idle, 1 ready, 2 ident, 3 stby, 4 tran, 5 data, 6 btst, 7 rcv, 8 prg, 9 dis, 10 ina, 11 slp, 12 irq, only 0 and 4 is used for select clock.
-		comp_filt=1						#0 not filt, 1 filt, bit0 resp crc error
-		cmd_filt=3						#0 not filt, 1 filt, bit0 filt illegal cmd between cmd0 and cmd1, bit1 filt no response cmd, bit2 filt bus_test cmd, bit3 filt tuning cmd
-
+			pattern_type=0					#0 random data, 1 user pattern, 2 int increase, 3 int decrease, 4 from log
+			pattern_data="UserPatternData"	#user data pattern.
+			pattern_len=15					#user pattern data len
+			start_value=100					#use for int inc or int dec
+			block_size=512
+			max_sectors=128					#max sectors per request, if biger than this value it will be divided to several requests. 
+			host_io=1						#1 1bit, 4 4bit, 8 8bit
+			data_rate=0						#0 sdr, 1 ddr
+			init_clk=2000					#init state clock
+			usr_clk=40000					#user space clock,it will use this clock after enter transfer mode and change bus mode. 
+			self_div=1						#0, divided it by this parser tool, 1 divided it use LargeRW command.
+			comp_mask=320					#0x140 command response compare mask.
+			curr_state=0					#0 idle, 1 ready, 2 ident, 3 stby, 4 tran, 5 data, 6 btst, 7 rcv, 8 prg, 9 dis, 10 ina, 11 slp, 12 irq, only 0 and 4 is used for select clock.
+			comp_filt=1						#0 not filt, 1 filt, bit0 resp crc error
+			cmd_filt=3						#0 not filt, 1 filt, bit0 filt illegal cmd between cmd0 and cmd1, bit1 filt no response cmd, bit2 filt bus_test cmd, bit3 filt tuning cmd
+		config for simulator script:
+			map_reset=0						#0 unmap reset command,1 map cmd1 to power reset cmd
+			erase_sectors=32768				#sector base, 32768*512=16M
+			show_id=1						#1 show event_id, 0 show test cycle
 4. Output files:
 	a. log.txt contains debug info.
 
@@ -68,3 +71,4 @@ Example:
 	e. generate "Request Idle Distribution" excel
 	f. generate "Seq Throughput" excel, including cmd25, cmd24, cmd18, cmd17
 	g. generate cypress script files.
+	h. generate simulator script files.
