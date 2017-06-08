@@ -27,7 +27,7 @@ objects = \
 	funcs/func.o \
 	funcs/config.o \
 	funcs/spec.o	\
-	funcs/cypress/file.o \
+	funcs/file.o \
 	funcs/cypress/cypress.o \
 	funcs/cypress/cypress_cfg.o
 

@@ -648,8 +648,8 @@ int cypress_init(func* func, func_param *param)
     press->host_io = press->cfg->host_io;
     press->data_rate = press->cfg->data_rate;
 	press->block_size = press->cfg->block_size;
-	//press->curr_state = cfg->def_state;
-	if(press->cfg->curr_state < STATE_TRAN)
+	//press->entry_state = cfg->def_state;
+	if(press->cfg->entry_state < STATE_TRAN)
     	press->curr_clk = press->cfg->init_clk;
 	else
 		press->curr_clk = press->cfg->usr_clk;

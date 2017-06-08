@@ -108,7 +108,11 @@ int file_init(file_info *file, const char *desc, const char *pattern, const char
     dbg(L_INFO, "log path: %s\n", log_path);
     file->log_name = get_file_name(log_path, '/');
     file->log_path = get_parent_path(log_path, '/');
-    file->pattern = strdup(pattern);
+	if(pattern == NULL){
+	    file->pattern = strdup("shell");
+	}else{
+	    file->pattern = strdup(pattern);
+	}
 
 	if(need_bins){
 		file->rid = 0;//file name id for read

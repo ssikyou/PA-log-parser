@@ -19,7 +19,7 @@ static config_list list[]={
     {.type = CFG_INT, .key = "usr_clk"},//9
 	{.type = CFG_INT, .key = "self_div"},//10
 	{.type = CFG_INT, .key = "comp_mask"},//11
-	{.type = CFG_INT, .key = "curr_state"},//12
+	{.type = CFG_INT, .key = "entry_state"},//12
 	{.type = CFG_INT, .key = "comp_filt"},//13
 	{.type = CFG_INT, .key = "cmd_filt"},//14
 };
@@ -78,7 +78,7 @@ int cypress_load_configs(mmc_parser *parser, func_param *param)
     cfg->usr_clk = list[9].val_int;
 	cfg->self_div = list[10].val_int;
 	cfg->comp_mask = list[11].val_int;
-	cfg->curr_state = list[12].val_int;
+	cfg->entry_state = list[12].val_int;
 	cfg->comp_filt = list[13].val_int;
 	cfg->cmd_filt = list[14].val_int;
 
@@ -136,8 +136,8 @@ int cypress_config_init(cypress_cfg *cfg, int has_data)
         return -1;
     }
 
-    if((cfg->curr_state < STATE_IDLE)||(cfg->curr_state > STATE_IRQ)){
-        error("ERR: %s transfer clk(%d) out of range for cypress\n", __func__, cfg->curr_state);
+    if((cfg->entry_state < STATE_IDLE)||(cfg->entry_state > STATE_IRQ)){
+        error("ERR: %s entry state(%d) out of range for cypress\n", __func__, cfg->entry_state);
         return -1;
     }
     //pattern_type 0 random data, 1 user pattern, 2 int increase, 3 int decrease ,4 from log data

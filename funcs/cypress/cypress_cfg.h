@@ -36,7 +36,7 @@ typedef struct cypress_cfg{
     unsigned int usr_clk;//unit KHz user mode clock
 	int self_div;
 	int comp_mask;
-	unsigned char curr_state;//current states for script
+	unsigned char entry_state;//current states for script
 	unsigned char comp_filt;//0 not filt, 1 filt, bit0 resp crc error
 	int cmd_filt;//0 not filt, 1 filt, bit0 filt illegal cmd between cmd0 and cmd1, bit1 filt no response cmd
 
