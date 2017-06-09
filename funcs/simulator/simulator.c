@@ -157,6 +157,54 @@ static int simulator_suddom_reset(simulator *sim, unsigned int event_id)
 	return 0;
 }
 
+static int pre(void*arg, mmc_request *req)
+{
+	simulator *sim = (simulator *)arg;
+	mmc_cmd *cmd = req->cmd;
+    unsigned char id, value;
+	if(cmd->cmd_index == 6){
+		id = (cmd->arg>>16)&0xff;
+		value = (cmd->arg>>8)&0xff;
+
+		if(id == 179){//b3
+			switch(value & 0x03){
+				case 0:
+					error("%s:Enter USER part(0x%08x)\n",__func__, cmd->arg);
+					break;
+				case 1:
+					error("%s:Enter BOOT1 part(0x%08x)\n",__func__, cmd->arg);
+					break;
+				case 2:
+					error("%s:Enter BOOT2 part(0x%08x)\n",__func__, cmd->arg);
+					break;
+				case 3:
+					error("%s:Enter RPMB part(0x%08x)\n",__func__, cmd->arg);
+					break;
+				case 4:
+					error("%s:Enter GP2 part(0x%08x)\n",__func__, cmd->arg);
+					break;
+				case 5:
+					error("%s:Enter GP2 part(0x%08x)\n",__func__, cmd->arg);
+					break;
+				case 6:
+					error("%s:Enter GP3 part(0x%08x)\n",__func__, cmd->arg);
+					break;
+				case 7:
+					error("%s:Enter GP4 part(0x%08x)\n",__func__, cmd->arg);
+					break;
+			}
+			if((value & 0x03) == 0){
+				sim->in_userpart = 1;
+			}else{
+				sim->in_userpart = 0;
+			}
+		}
+	}
+	if(sim->in_userpart == 0)
+		return 1;
+	else
+		return 0;
+}
 
 static int class1(void*arg, mmc_request *req)
 {
@@ -172,17 +220,7 @@ static int class1(void*arg, mmc_request *req)
 				simulator_reset(sim, cmd->event_id);
 			break;
 		case 6:
-		    id = (cmd->arg>>16)&0xff;
-		    value = (cmd->arg>>8)&0xff;
-			if(id == 179){//b3
-	            if((value & 0x3) == 0){
-					dbg(L_INFO, "%s:Enter user part\n",__func__);
-					sim->in_userpart = 1;
-				}else{
-					dbg(L_INFO, "%sLeave user part\n",__func__);
-					sim->in_userpart = 0;
-				}
-	        }
+			//do it in pre function
 			break;
 	}
 
@@ -251,6 +289,7 @@ static int class5(void*arg, mmc_request *req)
 }
 
 static class_ops ops = {
+	.pre = &pre,
 	.class1 = &class1,
 	.class2 = &class2,
 	.class4 = &class4,
@@ -296,12 +335,9 @@ int simulator_request(func *func, mmc_request *req)
 	if((sim == NULL)||(sim->spec == NULL)){
 		return 0;
 	}
-	if(sim->in_userpart == 0){
-		return 0;
-	}
 
 	spec = sim->spec;
-    if(req->sbc){
+    if(req->sbc && (sim->in_userpart != 0)){
         handle_sbc_ops(spec, req->sbc);
     }
 
@@ -309,7 +345,7 @@ int simulator_request(func *func, mmc_request *req)
         handle_class_ops(spec, req);
     }
 
-    if(req->stop){
+    if(req->stop && (sim->in_userpart != 0)){
 		handle_stop_ops(spec, req->stop);
     }
 
